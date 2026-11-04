@@ -40,8 +40,7 @@
     "icon.svg",
     "assets/*.png",
     "README.md",
-    "LICENSE",
-    "CHANGELOG.md"
+    "LICENSE"
   ],
   "dsh": {
     "manifestVersion": 1,

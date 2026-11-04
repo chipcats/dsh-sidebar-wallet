@@ -418,8 +418,6 @@ const BALANCE_TTL_MS = 25_000
 const SAMPLE_INTERVAL_MS = 60_000
 /** Stop background refreshes this long after the last browser poll. */
 const SAMPLE_IDLE_MS = 10 * 60_000
-/** Minimum gap between two full session-log scans triggered by a manual refresh. */
-const RESCAN_MIN_GAP_MS = 15_000
 
 export default {
   name,
@@ -442,6 +440,8 @@ export default {
       scanning: false,
       /** Official Platform reading: { value, error, at, lastTry, inflight }. */
       official: { value: null, error: null, at: 0, lastTry: 0, inflight: null },
+      /** Starts the effect-owned background refresh chain; set while mounted. */
+      startRefresh: null,
     }
 
     // -- balance ------------------------------------------------------------
@@ -541,8 +541,10 @@ export default {
     // -- today's spend (session-log replay) ---------------------------------
     /**
      * Replay every session that has events in the current Beijing day and price
-     * its assistant-message usage blocks. Runs at boot, at each day rollover and
-     * on a throttled manual refresh; callers never await it.
+     * its assistant-message usage blocks. Replayed on demand — only when the
+     * official Platform figure is unavailable and the payload needs a fallback —
+     * never at boot and never on a manual refresh; the official number covers
+     * the normal path and the live `session/event` feed keeps this current.
      */
     const scanToday = async () => {
       if (state.scanning) return
@@ -590,7 +592,7 @@ export default {
       }
     }
 
-    /** Reset the aggregate when the Beijing day flips; kick off a scan. */
+    /** Reset the aggregate when the Beijing day flips; the replay stays lazy. */
     const ensureToday = (now = Date.now()) => {
       const key = beijingDayKey(now)
       if (key !== state.todayDay) {
@@ -598,11 +600,8 @@ export default {
         state.today = emptyAggregate()
         state.todayScanned = false
         state.official = { value: null, error: null, at: 0, lastTry: 0, inflight: null }
-        void scanToday()
         void ensureOfficial()
-        return
       }
-      if (!state.todayScanned && !state.scanning) void scanToday()
     }
 
     // Live append feed: one call per assistant message, priced at commit time.
@@ -612,18 +611,18 @@ export default {
         const usage = event.data?.usage
         if (!usage) return
         const at = typeof event.time === 'number' ? event.time : Date.now()
-        if (beijingDayKey(at) !== state.todayDay) {
-          ensureToday(at)
-          return
+        if (beijingDayKey(at) !== state.todayDay) ensureToday(at)
+        // The event that caused a rollover belongs to the new day.
+        if (beijingDayKey(at) === state.todayDay) {
+          addCall(state.today, usage, event.data?.message?.source?.model, at)
         }
-        addCall(state.today, usage, event.data?.message?.source?.model, at)
       } catch {
         /* the readout must not be able to break the event feed */
       }
     })
 
-    // Boot scan, plus a timer that only shuffles the aggregate across midnight.
-    void scanToday()
+    // A timer that only shuffles the aggregate across midnight; the replay is
+    // requested lazily from `snapshot` when the fallback is actually needed.
     root.effect(() => {
       const timer = setInterval(() => ensureToday(), 60_000)
       if (typeof timer.unref === 'function') timer.unref()
@@ -631,30 +630,61 @@ export default {
     }, 'dsh-sidebar-wallet: day rollover')
 
     // -- background refresh while a browser watches -------------------------
-    const tick = async () => {
-      if (Date.now() - state.lastPoll > SAMPLE_IDLE_MS) {
-        state.refreshing = false
-        return
+    // The chain is owned by this plugin's effect: unloading or reloading the
+    // plugin clears the pending timer, so no orphan loop keeps fetching.
+    root.effect(() => {
+      let timer = null
+      let disposed = false
+      let running = false
+      const schedule = (delay) => {
+        if (disposed) return
+        timer = setTimeout(() => void run(), delay)
+        if (typeof timer.unref === 'function') timer.unref()
       }
-      try {
-        await ensureBalance()
-      } catch {
-        /* keep refreshing */
+      const run = async () => {
+        timer = null
+        if (disposed || running) return
+        running = true
+        let again = true
+        try {
+          if (Date.now() - state.lastPoll > SAMPLE_IDLE_MS) {
+            state.refreshing = false
+            again = false
+            return
+          }
+          try {
+            await ensureBalance()
+          } catch {
+            /* keep refreshing */
+          }
+          if (disposed) return
+          try {
+            await ensureOfficial()
+          } catch {
+            /* keep refreshing */
+          }
+        } finally {
+          running = false
+          if (!disposed && again && timer === null) schedule(SAMPLE_INTERVAL_MS)
+        }
       }
-      try {
-        await ensureOfficial()
-      } catch {
-        /* keep refreshing */
+      state.startRefresh = () => {
+        if (disposed || timer !== null || running) return
+        schedule(0)
       }
-      const timer = setTimeout(() => void tick(), SAMPLE_INTERVAL_MS)
-      if (typeof timer.unref === 'function') timer.unref()
-    }
+      return () => {
+        disposed = true
+        state.startRefresh = null
+        if (timer !== null) clearTimeout(timer)
+        timer = null
+      }
+    }, 'dsh-sidebar-wallet: background refresh')
 
     const snapshot = async (force) => {
       state.lastPoll = Date.now()
       if (!state.refreshing) {
         state.refreshing = true
-        void tick()
+        if (state.startRefresh) state.startRefresh()
       }
       ensureToday()
       // Official usage and the API balance are independent; fetch them together.
@@ -667,6 +697,15 @@ export default {
       ])
       const now = Date.now()
       ensureToday(now)
+      // Official figure unavailable: replay today's logs once so the fallback
+      // has data on the very request that needs it (instead of a blank readout).
+      if (official.value === null && !state.todayScanned && !state.scanning) {
+        try {
+          await scanToday()
+        } catch {
+          /* the fallback degrades to the live accumulator */
+        }
+      }
       const local = state.today
       const localCost = round6(local.cost)
       const officialValue = official.value
@@ -785,7 +824,6 @@ export default {
               } catch (err) {
                 sendJson(res, { ok: false, error: String(err?.message || err).slice(0, 200) })
               }
-              if (force && Date.now() - state.todayScannedAt > RESCAN_MIN_GAP_MS) void scanToday()
             },
           }),
         'dsh-sidebar-wallet: state route',
