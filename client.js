@@ -230,12 +230,6 @@ window.__ModuleLoader__.load({
 				whiteSpace: 'normal',
 				color: 'var(--dsw-alias-state-error-primary)',
 			},
-			cardFooter: {
-				paddingTop: '6px',
-				borderTop: '1px solid var(--dsw-alias-border-l1)',
-				fontSize: '11px',
-				color: 'var(--dsw-alias-label-secondary)',
-			},
 		};
 
 		// --- placement --------------------------------------------------------
@@ -530,7 +524,7 @@ window.__ModuleLoader__.load({
 							cardNotes.map((note) =>
 								h('span', { key: note.key, style: note.error ? CSS.cardError : CSS.cardNote }, note.text),
 							),
-							h('span', { style: CSS.cardFooter }, refreshing ? '刷新中…' : '点击刷新'),
+							refreshing ? h('span', { key: 'refreshing', style: CSS.cardNote }, '刷新中…') : null,
 						)
 					: null,
 			);
