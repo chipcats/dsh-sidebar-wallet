@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "侧边栏钱包",
-    "description": "在侧边栏账户行最右端显示 DeepSeek 余额与今日消费（官方后台用量口径）。"
+    "description": "在侧边栏账户行最右端一行显示 DeepSeek 余额与今日消费，悬停展开明细卡片。"
   }
 }

@@ -175,6 +175,67 @@ window.__ModuleLoader__.load({
 				fontVariantNumeric: 'tabular-nums',
 				color: 'var(--dsw-alias-state-error-primary)',
 			},
+			// Hover card: replaces the native title tooltip so the rows can be
+			// aligned in two columns with theme tokens. `bg-layer-1` is the raised
+			// surface (white in light, elevated dark tone in dark); `bg-overlay`
+			// reads as a grey scrim next to the sidebar, so it is only a fallback.
+			card: {
+				position: 'fixed',
+				zIndex: 6,
+				display: 'flex',
+				flexDirection: 'column',
+				gap: '5px',
+				minWidth: '196px',
+				maxWidth: '300px',
+				margin: 0,
+				padding: '9px 11px 8px',
+				border: '1px solid var(--dsw-alias-border-l1)',
+				borderRadius: '10px',
+				background: 'var(--dsw-alias-bg-layer-1, var(--dsw-alias-bg-overlay))',
+				// Two-layer soft shadow built from the theme's neutral ink, so it
+				// reads as a raised surface in both light and dark themes without
+				// a literal color.
+				boxShadow:
+					'0 10px 30px color-mix(in srgb, var(--dsw-static-neutral-1000) 14%, transparent), ' +
+					'0 2px 8px color-mix(in srgb, var(--dsw-static-neutral-1000) 8%, transparent)',
+				color: 'var(--dsw-alias-label-primary)',
+				pointerEvents: 'none',
+				whiteSpace: 'nowrap',
+				font: 'inherit',
+			},
+			cardRow: {
+				display: 'flex',
+				alignItems: 'baseline',
+				gap: '10px',
+			},
+			cardLabel: {
+				flex: '0 0 32px',
+				fontSize: '11px',
+				color: 'var(--dsw-alias-label-secondary)',
+			},
+			cardValue: {
+				fontSize: '12px',
+				fontVariantNumeric: 'tabular-nums',
+				color: 'var(--dsw-alias-label-primary)',
+			},
+			cardNote: {
+				fontSize: '11px',
+				lineHeight: '1.4',
+				whiteSpace: 'normal',
+				color: 'var(--dsw-alias-label-secondary)',
+			},
+			cardError: {
+				fontSize: '11px',
+				lineHeight: '1.4',
+				whiteSpace: 'normal',
+				color: 'var(--dsw-alias-state-error-primary)',
+			},
+			cardFooter: {
+				paddingTop: '6px',
+				borderTop: '1px solid var(--dsw-alias-border-l1)',
+				fontSize: '11px',
+				color: 'var(--dsw-alias-label-secondary)',
+			},
 		};
 
 		// --- placement --------------------------------------------------------
@@ -226,6 +287,8 @@ window.__ModuleLoader__.load({
 			return {
 				left: Math.max(8, Math.round(columnRect.right - inlinePadding - width)),
 				top: Math.max(8, Math.round(Math.min(top, columnRect.bottom - height - 4))),
+				width: Math.round(width),
+				height: Math.round(height),
 			};
 		}
 
@@ -239,8 +302,19 @@ window.__ModuleLoader__.load({
 			const [error, setError] = useState(null);
 			const [placement, setPlacement] = useState(null);
 			const [hovered, setHovered] = useState(false);
+			const [open, setOpen] = useState(false);
+			const openTimer = useRef(null);
 			const [now, setNow] = useState(() => Date.now());
 			const [refreshing, setRefreshing] = useState(false);
+
+			const showCard = () => {
+				clearTimeout(openTimer.current);
+				openTimer.current = setTimeout(() => setOpen(true), 120);
+			};
+			const hideCard = () => {
+				clearTimeout(openTimer.current);
+				setOpen(false);
+			};
 
 			// Poll the Host route; a manual click forces a fresh balance.
 			useEffect(() => {
@@ -278,11 +352,14 @@ window.__ModuleLoader__.load({
 				};
 			}, []);
 
-			// Local clock: only the tooltip's peak countdown needs it.
+			// Local clock: only the hover card's peak countdown needs it.
 			useEffect(() => {
 				const timer = setInterval(() => setNow(Date.now()), 1000);
 				return () => clearInterval(timer);
 			}, []);
+
+			// Drop a pending reveal timer when the readout unmounts.
+			useEffect(() => () => clearTimeout(openTimer.current), []);
 
 			// Place the readout into the account row; re-measure on layout changes.
 			useLayoutEffect(() => {
@@ -291,7 +368,15 @@ window.__ModuleLoader__.load({
 				const measure = () => {
 					const next = measurePlacement(anchorRef.current, readoutRef.current);
 					if (!next) return;
-					setPlacement((prev) => (prev && prev.left === next.left && prev.top === next.top ? prev : next));
+					setPlacement((prev) =>
+						prev &&
+						prev.left === next.left &&
+						prev.top === next.top &&
+						prev.width === next.width &&
+						prev.height === next.height
+							? prev
+							: next,
+					);
 				};
 				const schedule = () => {
 					cancelAnimationFrame(frame);
@@ -326,7 +411,42 @@ window.__ModuleLoader__.load({
 			const officialSource = !!(today && today.source === 'official');
 			const pending = !snapshot || (today && today.source === 'estimate' && !today.scanned);
 
-			const title = buildTitle({ snapshot, error, balance, peak, countdown, refreshing });
+			const cardRows = [];
+			if (snapshot) {
+				cardRows.push({ label: '余额', value: balance });
+				const requestCount = Number(today && today.requests) || 0;
+				const todayValue = pending
+					? '…'
+					: (officialSource ? '' : '≈') + todayCost + (requestCount > 0 ? ' · ' + requestCount + ' 次' : '');
+				cardRows.push({ label: '今日', value: todayValue });
+				if (officialSource || (today && today.scanned)) {
+					cardRows.push({
+						label: '输入',
+						value:
+							'命中 ' +
+							compactTokens(today.cacheHitTokens) +
+							' · 未命中 ' +
+							compactTokens(today.cacheMissTokens),
+					});
+					cardRows.push({ label: '输出', value: compactTokens(today.outputTokens) });
+				}
+				cardRows.push({ label: '峰谷', value: (peak ? '高峰' : '空闲') + ' · ' + countdown });
+				cardRows.push({
+					label: '更新',
+					value: clockOf(snapshot.balanceAt) + ' · ' + sourceLabel(snapshot.balanceSource),
+				});
+			}
+
+			const cardNotes = [];
+			if (error) cardNotes.push({ key: 'error', text: error, error: true });
+			if (today && today.officialError) {
+				cardNotes.push({
+					key: 'official',
+					text: (officialSource ? '官方用量刷新失败：' : '官方用量不可用：') + today.officialError,
+					error: false,
+				});
+			}
+
 			const aria =
 				'DeepSeek 余额 ' +
 				balance +
@@ -345,6 +465,14 @@ window.__ModuleLoader__.load({
 				hovered ? CSS.readoutHover : null,
 			);
 
+			// The card hangs above the readout, right-aligned to its edge, so it
+			// never moves the footer row and closes with the pointer leaving the pill.
+			const cardStyle = Object.assign({}, CSS.card, {
+				left: (placement ? placement.left + placement.width : 8) + 'px',
+				top: (placement ? placement.top : 8) + 'px',
+				transform: 'translate(-100%, calc(-100% - 6px))',
+			});
+
 			return h(
 				'span',
 				{ ref: anchorRef, style: CSS.anchor },
@@ -354,15 +482,26 @@ window.__ModuleLoader__.load({
 						ref: readoutRef,
 						type: 'button',
 						style: readoutStyle,
-						title,
 						'aria-label': aria,
 						onClick: () => {
 							if (readoutRefresh) readoutRefresh();
 						},
-						onMouseEnter: () => setHovered(true),
-						onMouseLeave: () => setHovered(false),
-						onFocus: () => setHovered(true),
-						onBlur: () => setHovered(false),
+						onMouseEnter: () => {
+							setHovered(true);
+							showCard();
+						},
+						onMouseLeave: () => {
+							setHovered(false);
+							hideCard();
+						},
+						onFocus: () => {
+							setHovered(true);
+							showCard();
+						},
+						onBlur: () => {
+							setHovered(false);
+							hideCard();
+						},
 					},
 					h('span', { style: CSS.label }, '余额'),
 					h('span', { style: error && snapshot == null ? CSS.errorValue : CSS.value }, balance),
@@ -374,65 +513,31 @@ window.__ModuleLoader__.load({
 						pending ? '…' : (officialSource ? '' : '≈') + todayCost,
 					),
 				),
+				open && placement
+					? h(
+							'span',
+							{ style: cardStyle, 'aria-hidden': 'true' },
+							snapshot
+								? cardRows.map((row) =>
+										h(
+											'span',
+											{ key: row.label, style: CSS.cardRow },
+											h('span', { style: CSS.cardLabel }, row.label),
+											h('span', { style: CSS.cardValue }, row.value),
+										),
+									)
+								: h('span', { style: CSS.cardNote }, '正在读取…'),
+							cardNotes.map((note) =>
+								h('span', { key: note.key, style: note.error ? CSS.cardError : CSS.cardNote }, note.text),
+							),
+							h('span', { style: CSS.cardFooter }, refreshing ? '刷新中…' : '点击刷新'),
+						)
+					: null,
 			);
 		}
 
 		/** Manual refresh hook of the mounted readout (one readout per page). */
 		let readoutRefresh = null;
-
-		function buildTitle(input) {
-			const { snapshot, error, balance, peak, countdown, refreshing } = input;
-			const lines = [];
-			if (snapshot) {
-				lines.push(
-					'余额 ' +
-						balance +
-						'（' +
-						clockOf(snapshot.balanceAt) +
-						' 更新 · ' +
-						sourceLabel(snapshot.balanceSource) +
-						'）',
-				);
-				const today = snapshot.today || {};
-				if (today.source === 'official') {
-					lines.push('今日消费 ' + todayMoney(today.cost) + '（官方后台口径 · ' + (today.requests || 0) + ' 次请求）');
-					lines.push(
-						'输入命中 ' +
-							compactTokens(today.cacheHitTokens) +
-							' · 未命中 ' +
-							compactTokens(today.cacheMissTokens) +
-							' · 输出 ' +
-							compactTokens(today.outputTokens),
-					);
-					lines.push('官方口径：该账户全部 API 调用');
-					if (today.officialError) lines.push('官方用量刷新失败：' + today.officialError);
-				} else if (today.scanned) {
-					lines.push('今日估算 ≈' + todayMoney(today.cost) + '（本机会话日志 · ' + (today.requests || 0) + ' 次调用）');
-					lines.push(
-						'输入 ' +
-							compactTokens(today.cacheMissTokens) +
-							' · 缓存命中 ' +
-							compactTokens(today.cacheHitTokens) +
-							' · 输出 ' +
-							compactTokens(today.outputTokens),
-					);
-					lines.push(
-						today.officialError
-							? '官方用量不可用：' + today.officialError
-							: '官方用量暂不可用（未登录 DeepSeek 账号？）',
-					);
-				} else {
-					lines.push('今日统计中…');
-					if (today.officialError) lines.push('官方用量不可用：' + today.officialError);
-				}
-			} else {
-				lines.push('正在读取余额…');
-			}
-			lines.push('当前' + (peak ? '高峰时段' : '空闲时段') + ' · ' + countdown);
-			lines.push(refreshing ? '刷新中…' : '点击刷新');
-			if (error) lines.push(error);
-			return lines.join('\n');
-		}
 
 		exports.inject = ['slots'];
 		exports.apply = function apply(ctx) {

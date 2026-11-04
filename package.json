@@ -1,7 +1,7 @@
 {
   "name": "dsh-sidebar-wallet",
-  "version": "0.2.0",
-  "description": "Sidebar wallet readout: the DeepSeek balance and today's official spend at the right end of the sidebar account row.",
+  "version": "0.2.1",
+  "description": "One-line DeepSeek balance and today's spend at the right end of the DSH sidebar account row, with a hover card.",
   "type": "module",
   "license": "MIT",
   "author": "chipcats",
@@ -38,6 +38,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
+    "assets/*.png",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

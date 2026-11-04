@@ -1,18 +1,24 @@
 # 侧边栏钱包 · dsh-sidebar-wallet
 
-在 DeepSeek Harness 侧边栏底部**账户行（头像那一行）的最右端**显示一行小字：余额与今日消费。
+在 DeepSeek Harness 侧边栏底部、账户行（头像那一行）的最右端，用一行小字显示 **余额** 与 **今日消费**；悬停展开明细卡片，点击立即刷新。
 
 ```
 余额 ¥3.85 · 今日 ¥17.86
 ```
 
-> 今日消费取 DeepSeek 官方后台口径（与网页控制台「用量」页一致，北京时间 0 点起算）；只有官方口径不可用时才回退本机会话日志估算，并带 `≈` 前缀。
+> 「今日消费」取 DeepSeek 官方后台用量口径（与网页控制台「用量」页一致，北京时间 0 点起算）；官方口径不可用时才回退本机会话日志估算，并带 `≈` 前缀。
+
+**English** — A one-line wallet readout at the right end of the DSH sidebar account row: DeepSeek balance and today's spend, with a hover card for requests, tokens and the peak/off-peak countdown.
+
+![侧边栏读数与悬停卡片](assets/preview.png)
+
+*界面示意（示例数据，按组件样式渲染）*
 
 ## 功能
 
 - **余额**：官方口径。优先用已保存的 `DEEPSEEK_API_KEY` 调 `GET /user/balance`，取不到时退回当前登录的 DeepSeek 账号钱包。
 - **今日消费**：DeepSeek 后台官方用量口径（北京时间 0 点起算），显示为 `今日 ¥17.86`；官方不可用时回退本机会话日志估算（`今日 ≈¥3.90`）。
-- **悬停**：余额更新时间/来源、今日消费口径与请求数、输入/缓存命中/输出 token、当前峰谷时段与倒计时。
+- **悬停卡片**：两列明细——余额、今日消费与请求数、输入（缓存命中 / 未命中）、输出、峰谷时段与实时倒计时、更新时间与来源；鼠标移开即收起，不遮挡操作。
 - **点击**：立即刷新（余额 + 官方用量）。
 - **收起侧边栏**时不显示；无配置项、无设置页、全程只读。
 
@@ -22,7 +28,7 @@
 
 ```bash
 # 从 GitHub 安装（推荐，锁 tag）
-dsh plugin --profile desktop add github:chipcats/dsh-sidebar-wallet#v0.2.0
+dsh plugin --profile desktop add github:chipcats/dsh-sidebar-wallet#v0.2.1
 
 # 从本地目录安装
 dsh plugin --profile desktop add link:/path/to/dsh-sidebar-wallet
@@ -69,10 +75,10 @@ dsh plugin --profile desktop add dsh-sidebar-wallet
 | 文件 | 职责 |
 | --- | --- |
 | `index.js` | Host 半区：余额抓取、官方用量导出（ZIP/CSV 解析）、会话日志回放兜底、`session/event` 实时累计、只读路由 `GET /dsh-sidebar-wallet/state.json` |
-| `client.js` | 浏览器半区：注册到 `sidebar.footer.action`，把读数定位到下方账户行右端；每分钟轮询 |
+| `client.js` | 浏览器半区：注册到 `sidebar.footer.action`，把读数定位到下方账户行右端，悬停渲染明细卡片；每分钟轮询 |
 | `cordis.patch.yml` | 把插件行插入 profile 加载树 |
 
-布局说明：`sidebar.footer.action` 只分配「账户行之上」的那一行，所以本插件在该行放一个 0 尺寸锚点，再从自身祖先里量出侧边栏列与账户行的几何，把读数固定定位到账户行右端（量不到时退化为侧边栏右下角）。不改动、不替换宿主控件。
+布局说明：`sidebar.footer.action` 只分配「账户行之上」的那一行，所以本插件在该行放一个 0 尺寸锚点，再从自身祖先里量出侧边栏列与账户行的几何，把读数固定定位到账户行右端（量不到时退化为侧边栏右下角）。悬停卡片同样固定定位在读数上方，不使用宿主控件，也不改动宿主布局。
 
 ## 已知限制
 
