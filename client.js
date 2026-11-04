@@ -303,7 +303,12 @@ window.__ModuleLoader__.load({
 
 			const showCard = () => {
 				clearTimeout(openTimer.current);
-				openTimer.current = setTimeout(() => setOpen(true), 120);
+				openTimer.current = setTimeout(() => {
+					// A fast pointer exit can skip the pill's mouseleave: never reveal
+					// the card unless the pill is still hovered when the delay ends.
+					if (!readoutRef.current || !readoutRef.current.matches(':hover')) return;
+					setOpen(true);
+				}, 120);
 			};
 			const hideCard = () => {
 				clearTimeout(openTimer.current);
@@ -354,6 +359,33 @@ window.__ModuleLoader__.load({
 
 			// Drop a pending reveal timer when the readout unmounts.
 			useEffect(() => () => clearTimeout(openTimer.current), []);
+
+			// The pointer can leave the page or the window without a mouseleave on
+			// the pill (fast exits, Alt-Tab, switching windows): close the card from
+			// global signals so a stale hover never leaves it floating.
+			useEffect(() => {
+				const closeCard = () => {
+					clearTimeout(openTimer.current);
+					setOpen(false);
+					setHovered(false);
+				};
+				const onMouseOut = (event) => {
+					if (!event.relatedTarget) closeCard();
+				};
+				const onVisibility = () => {
+					if (document.hidden) closeCard();
+				};
+				window.addEventListener('blur', closeCard);
+				document.addEventListener('mouseleave', closeCard);
+				document.addEventListener('mouseout', onMouseOut);
+				document.addEventListener('visibilitychange', onVisibility);
+				return () => {
+					window.removeEventListener('blur', closeCard);
+					document.removeEventListener('mouseleave', closeCard);
+					document.removeEventListener('mouseout', onMouseOut);
+					document.removeEventListener('visibilitychange', onVisibility);
+				};
+			}, []);
 
 			// Place the readout into the account row; re-measure on layout changes.
 			useLayoutEffect(() => {
