@@ -1,0 +1,9 @@
+# Bundle patch for dsh-sidebar-wallet.
+#
+# Declaring `dsh.bundle.patch` in package.json turns this package into a profile
+# layer: the row below mounts the Host half (wallet balance, official today
+# usage, and its read-only JSON route), and the package's `dsh.client`
+# declaration adds the browser half that renders the readout in the sidebar foot.
+- insert:
+    - id: dsh-sidebar-wallet
+      name: dsh-sidebar-wallet
