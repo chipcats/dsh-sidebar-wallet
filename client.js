@@ -456,7 +456,7 @@ window.__ModuleLoader__.load({
 					});
 					cardRows.push({ label: '输出', value: compactTokens(today.outputTokens) });
 				}
-				cardRows.push({ label: '峰谷', value: (peak ? '高峰' : '空闲') + ' · ' + countdown });
+				cardRows.push({ label: '峰谷', value: (peak ? '高峰' : '低谷') + ' · ' + countdown });
 				cardRows.push({
 					label: '更新',
 					value: clockOf(snapshot.balanceAt) + ' · ' + sourceLabel(snapshot.balanceSource),
@@ -480,7 +480,7 @@ window.__ModuleLoader__.load({
 				(officialSource ? '消费 ' : '估算消费 ≈') +
 				todayCost +
 				'，当前' +
-				(peak ? '高峰时段' : '空闲时段');
+				(peak ? '高峰时段' : '低谷时段');
 
 			const readoutStyle = Object.assign(
 				{},
