@@ -21,10 +21,8 @@
 要求 DeepSeek Harness ≥ 0.2.1-rc.1（实测 0.2.1-rc.5）：
 
 ```bash
-dsh plugin --profile desktop add github:chipcats/dsh-sidebar-wallet#v0.2.3
+dsh plugin --profile desktop add github:chipcats/dsh-sidebar-wallet
 ```
-
-把 `desktop` 换成你的 profile 名，装好后刷新页面即可。
 
 ## 说明
 
