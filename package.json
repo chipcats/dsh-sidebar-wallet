@@ -3,6 +3,9 @@
   "version": "0.2.3",
   "description": "One-line DeepSeek balance and today's spend at the right end of the DSH sidebar account row, with a hover card.",
   "type": "module",
+  "scripts": {
+    "preview": "node tools/preview/make-preview.mjs"
+  },
   "license": "MIT",
   "author": "chipcats",
   "repository": {
