@@ -32,6 +32,111 @@ window.__ModuleLoader__.load({
 		/** Matches the Host's balance cache TTL; the Host is the source of truth. */
 		const POLL_MS = 60_000;
 
+		// --- wording ----------------------------------------------------------
+		// The UI follows the page language: Chinese for zh*, English otherwise.
+		// The Host ships structured error codes so every user-visible string stays
+		// in this table instead of leaking into payloads.
+		const LOCALE = (() => {
+			try {
+				const lang = String((typeof navigator !== 'undefined' && navigator.language) || 'zh');
+				return /^zh/i.test(lang) ? 'zh' : 'en';
+			} catch {
+				return 'zh';
+			}
+		})();
+
+		const TEXT = {
+			zh: {
+				title: '侧边栏钱包',
+				balance: '余额',
+				today: '今日',
+				input: '输入',
+				output: '输出',
+				rate: '峰谷',
+				updated: '更新',
+				calls: (count) => ' · ' + count + ' 次',
+				hitMiss: (hit, miss) => '命中 ' + hit + ' · 未命中 ' + miss,
+				rateValue: (peak, duration) => (peak ? '高峰' : '低谷') + ' · ' + duration + (peak ? ' 后转谷' : ' 后转峰'),
+				sourceApiKey: 'API Key',
+				sourceAccount: '登录账号',
+				loading: '正在读取…',
+				refreshing: '刷新中…',
+				readFailed: '读取失败',
+				officialRefreshFailed: '官方用量刷新失败：',
+				officialUnavailable: '官方用量不可用：',
+				balanceFailed: '余额读取失败：',
+				errors: {
+					NO_ACCOUNT: '未登录 DeepSeek 账号',
+					NETWORK: '网络请求失败',
+					AUTH: '接口拒绝了请求',
+					HTTP: '接口返回异常状态',
+					BODY: '导出内容读取失败',
+					SIZE: '导出内容过大',
+					SHAPE: '返回数据格式异常',
+					NO_KEY: '未配置 DEEPSEEK_API_KEY，且未登录 DeepSeek 账号',
+					UNKNOWN: '暂时不可用',
+				},
+				aria: (balance, cost, official, peak) =>
+					'DeepSeek 余额 ' +
+					balance +
+					'，今日' +
+					(official ? '消费 ' : '估算消费 ≈') +
+					cost +
+					'，当前' +
+					(peak ? '高峰时段' : '低谷时段'),
+			},
+			en: {
+				title: 'Sidebar Wallet',
+				balance: 'Balance',
+				today: 'Today',
+				input: 'Input',
+				output: 'Output',
+				rate: 'Rate',
+				updated: 'Updated',
+				calls: (count) => ' · ' + count + ' calls',
+				hitMiss: (hit, miss) => 'Hit ' + hit + ' · Miss ' + miss,
+				rateValue: (peak, duration) => (peak ? 'Peak · off-peak in ' : 'Off-peak · peak in ') + duration,
+				sourceApiKey: 'API key',
+				sourceAccount: 'Account',
+				loading: 'Loading…',
+				refreshing: 'Refreshing…',
+				readFailed: 'Read failed',
+				officialRefreshFailed: 'Official usage refresh failed: ',
+				officialUnavailable: 'Official usage unavailable: ',
+				balanceFailed: 'Balance request failed: ',
+				errors: {
+					NO_ACCOUNT: 'No DeepSeek account is signed in',
+					NETWORK: 'Network request failed',
+					AUTH: 'The API rejected the request',
+					HTTP: 'Unexpected HTTP status',
+					BODY: 'Could not read the exported file',
+					SIZE: 'The exported file is too large',
+					SHAPE: 'Unexpected response format',
+					NO_KEY: 'No DEEPSEEK_API_KEY and no DeepSeek account is signed in',
+					UNKNOWN: 'Temporarily unavailable',
+				},
+				aria: (balance, cost, official, peak) =>
+					'DeepSeek balance ' +
+					balance +
+					', today' +
+					(official ? "'s spend " : ' estimate ≈') +
+					cost +
+					', currently ' +
+					(peak ? 'peak hours' : 'off-peak hours'),
+			},
+		};
+
+		const T = TEXT[LOCALE];
+		const LOCALE_TAG = LOCALE === 'zh' ? 'zh-CN' : 'en-GB';
+
+		/** Localized reason for a Host error code, with the HTTP status when known. */
+		function describeError(code, status, fallback) {
+			const reason = (T.errors && T.errors[code]) || null;
+			let text = reason || fallback || T.errors.UNKNOWN;
+			if (typeof status === 'number' && Number.isFinite(status)) text += ' (HTTP ' + status + ')';
+			return text;
+		}
+
 		// --- peak / off-peak (keep in sync with index.js) ---------------------
 		const PEAK_HOURS = [
 			[9, 12],
@@ -109,15 +214,15 @@ window.__ModuleLoader__.load({
 		function clockOf(ms) {
 			if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—';
 			try {
-				return new Date(ms).toLocaleTimeString('zh-CN', { hour12: false });
+				return new Date(ms).toLocaleTimeString(LOCALE_TAG, { hour12: false });
 			} catch {
 				return '—';
 			}
 		}
 
 		function sourceLabel(source) {
-			if (source === 'apikey') return 'API Key';
-			if (source === 'account') return '登录账号';
+			if (source === 'apikey') return T.sourceApiKey;
+			if (source === 'account') return T.sourceAccount;
 			return '—';
 		}
 
@@ -185,7 +290,7 @@ window.__ModuleLoader__.load({
 				display: 'flex',
 				flexDirection: 'column',
 				gap: '5px',
-				minWidth: '196px',
+				minWidth: LOCALE === 'en' ? '232px' : '196px',
 				maxWidth: '300px',
 				margin: 0,
 				padding: '9px 11px 8px',
@@ -209,7 +314,7 @@ window.__ModuleLoader__.load({
 				gap: '10px',
 			},
 			cardLabel: {
-				flex: '0 0 32px',
+				flex: LOCALE === 'en' ? '0 0 56px' : '0 0 32px',
 				fontSize: '11px',
 				color: 'var(--dsw-alias-label-secondary)',
 			},
@@ -256,13 +361,55 @@ window.__ModuleLoader__.load({
 			for (const child of foot.children) {
 				if (!child.contains(node)) {
 					const rect = child.getBoundingClientRect();
-					if (rect.height > 0) return rect;
+					if (rect.height > 0) return { element: child, rect };
 				}
 			}
 			return null;
 		}
 
-		/** Viewport coordinates for a readout at the right end of the account row. */
+		/**
+		 * Layout facts of the account row: the widest button is the account launcher
+		 * (avatar + name); any other button on the right half is a shell control
+		 * (e.g. the "new version" pill). `contentRight` is where the launcher's own
+		 * content ends, `controlsLeft` where the right-hand controls start.
+		 */
+		function rowLayout(rowEl, rowRect) {
+			const buttons = [];
+			for (const el of rowEl.querySelectorAll('button, a, [role="button"]')) {
+				const rect = el.getBoundingClientRect();
+				if (rect.width < 8 || rect.height < 8) continue;
+				if (rect.right <= rowRect.left || rect.left >= rowRect.right) continue;
+				buttons.push({ el, rect });
+			}
+			let launcher = null;
+			for (const button of buttons) {
+				if (!launcher || button.rect.width > launcher.rect.width) launcher = button;
+			}
+			if (launcher && launcher.rect.width <= rowRect.width * 0.45) launcher = null;
+			const controls = buttons.filter(
+				(button) => button !== launcher && button.rect.left > rowRect.left + rowRect.width * 0.45,
+			);
+			let controlsLeft = null;
+			for (const control of controls) {
+				if (controlsLeft === null || control.rect.left < controlsLeft) controlsLeft = control.rect.left;
+			}
+			let contentRight = rowRect.left;
+			if (launcher) {
+				contentRight = launcher.rect.left;
+				for (const el of launcher.el.querySelectorAll('*')) {
+					const rect = el.getBoundingClientRect();
+					if (rect.width > 0 && rect.height > 0 && rect.right > contentRight) contentRight = rect.right;
+				}
+			}
+			return { contentRight, controlsLeft };
+		}
+
+		/**
+		 * Viewport coordinates for the readout and its hover card. The card is
+		 * right-aligned to the sidebar column (never to the compact readout, which
+		 * may sit far left of it) and capped to the column width so it can never be
+		 * clipped by the window edge.
+		 */
 		function measurePlacement(anchor, readout) {
 			if (!anchor || !readout) return null;
 			const column = findSidebarColumn(anchor);
@@ -271,18 +418,30 @@ window.__ModuleLoader__.load({
 			const readoutRect = readout.getBoundingClientRect();
 			const width = readoutRect.width || 0;
 			const height = readoutRect.height || 16;
-			const rowRect = findAccountRow(anchor, column);
+			const row = findAccountRow(anchor, column);
 			const inlinePadding = 12;
+			const layout = row
+				? rowLayout(row.element, row.rect)
+				: { contentRight: columnRect.left, controlsLeft: null };
+			const minLeft = Math.max((row ? row.rect.left : columnRect.left) + 8, layout.contentRight + 8);
+			const rightBound = Math.min(
+				columnRect.right - inlinePadding,
+				layout.controlsLeft === null ? Number.POSITIVE_INFINITY : layout.controlsLeft - 8,
+			);
+			const available = Math.max(0, rightBound - minLeft);
 
 			let top;
-			if (rowRect) top = rowRect.top + (rowRect.height - height) / 2;
+			if (row) top = row.rect.top + (row.rect.height - height) / 2;
 			else top = columnRect.bottom - 6 - 40;
 
 			return {
-				left: Math.max(8, Math.round(columnRect.right - inlinePadding - width)),
+				left: Math.max(minLeft, Math.round(rightBound - width)),
 				top: Math.max(8, Math.round(Math.min(top, columnRect.bottom - height - 4))),
 				width: Math.round(width),
 				height: Math.round(height),
+				available: Math.round(available),
+				cardRight: Math.round(columnRect.right - inlinePadding),
+				cardMaxWidth: Math.max(160, Math.round(columnRect.width - inlinePadding - 8)),
 			};
 		}
 
@@ -300,6 +459,9 @@ window.__ModuleLoader__.load({
 			const openTimer = useRef(null);
 			const [now, setNow] = useState(() => Date.now());
 			const [refreshing, setRefreshing] = useState(false);
+			/** True when the account row has no room for the labelled readout. */
+			const [compact, setCompact] = useState(false);
+			const fullWidth = useRef(0);
 
 			const showCard = () => {
 				clearTimeout(openTimer.current);
@@ -330,12 +492,17 @@ window.__ModuleLoader__.load({
 						if (!alive) return;
 						if (body && body.ok) {
 							setSnapshot(body);
-							setError(body.balanceError || null);
+							setError(
+								body.balanceError
+									? T.balanceFailed +
+											describeError(body.balanceErrorCode, body.balanceErrorStatus, body.balanceError)
+									: null,
+							);
 						} else {
-							setError((body && body.error) || '读取失败');
+							setError(T.readFailed);
 						}
 					} catch (err) {
-						if (alive) setError(String((err && err.message) || err));
+						if (alive) setError(T.readFailed);
 					} finally {
 						inFlight.current = false;
 						if (alive) setRefreshing(false);
@@ -394,12 +561,23 @@ window.__ModuleLoader__.load({
 				const measure = () => {
 					const next = measurePlacement(anchorRef.current, readoutRef.current);
 					if (!next) return;
+					if (compact) {
+						// The shell may remove its buttons again (e.g. after an update):
+						// restore the labelled form once the row has room for it.
+						const width = fullWidth.current;
+						if (width > 0 && next.available >= width + 12) setCompact(false);
+					} else if (next.width > next.available) {
+						fullWidth.current = next.width;
+						setCompact(true);
+						return;
+					}
 					setPlacement((prev) =>
 						prev &&
 						prev.left === next.left &&
 						prev.top === next.top &&
 						prev.width === next.width &&
-						prev.height === next.height
+						prev.height === next.height &&
+						prev.available === next.available
 							? prev
 							: next,
 					);
@@ -415,21 +593,47 @@ window.__ModuleLoader__.load({
 					if (readoutRef.current) observer.observe(readoutRef.current);
 				}
 				window.addEventListener('resize', schedule);
+				// The shell swaps its own footer controls (the update pill, its download
+				// progress) without resizing our nodes, so no ResizeObserver fires. Watch
+				// the footer for those mutations rather than polling: records that land
+				// inside our own anchor are skipped, so the readout's updates cannot feed
+				// the observer back into a loop.
+				let mutations = null;
+				const anchor = anchorRef.current;
+				const column = anchor ? findSidebarColumn(anchor) : null;
+				const row = anchor && column ? findAccountRow(anchor, column) : null;
+				const foot = row ? row.element.parentElement : null;
+				if (observer && row) observer.observe(row.element);
+				if (foot && typeof MutationObserver !== 'undefined') {
+					mutations = new MutationObserver((records) => {
+						const own = anchorRef.current;
+						if (own && records.length > 0 && records.every((record) => own.contains(record.target))) return;
+						schedule();
+					});
+					mutations.observe(foot, { childList: true, subtree: true, characterData: true, attributes: true });
+				}
+				const onVisibility = () => schedule();
+				const onFocus = () => schedule();
+				document.addEventListener('visibilitychange', onVisibility);
+				window.addEventListener('focus', onFocus);
 				// Neighbouring footer entries, fonts and the account name settle after
 				// the first frame; a couple of late measurements keep the row aligned.
 				const settles = [400, 1200, 3000].map((delay) => setTimeout(schedule, delay));
 				return () => {
 					cancelAnimationFrame(frame);
 					if (observer) observer.disconnect();
+					if (mutations) mutations.disconnect();
 					window.removeEventListener('resize', schedule);
+					document.removeEventListener('visibilitychange', onVisibility);
+					window.removeEventListener('focus', onFocus);
 					for (const timer of settles) clearTimeout(timer);
 				};
-			}, [wide]);
+			}, [wide, compact]);
 
 			if (!wide) return null;
 
 			const peak = isPeak(now);
-			const countdown = humanDuration(secondsToSwitch(now)) + (peak ? ' 后转谷' : ' 后转峰');
+			const countdown = humanDuration(secondsToSwitch(now));
 			const currency = (snapshot && snapshot.currency) || 'CNY';
 			const balance = money(snapshot ? snapshot.balance : null, currency);
 			const today = snapshot && snapshot.today ? snapshot.today : null;
@@ -439,26 +643,22 @@ window.__ModuleLoader__.load({
 
 			const cardRows = [];
 			if (snapshot) {
-				cardRows.push({ label: '余额', value: balance });
+				cardRows.push({ label: T.balance, value: balance });
 				const requestCount = Number(today && today.requests) || 0;
 				const todayValue = pending
 					? '…'
-					: (officialSource ? '' : '≈') + todayCost + (requestCount > 0 ? ' · ' + requestCount + ' 次' : '');
-				cardRows.push({ label: '今日', value: todayValue });
+					: (officialSource ? '' : '≈') + todayCost + (requestCount > 0 ? T.calls(requestCount) : '');
+				cardRows.push({ label: T.today, value: todayValue });
 				if (officialSource || (today && today.scanned)) {
 					cardRows.push({
-						label: '输入',
-						value:
-							'命中 ' +
-							compactTokens(today.cacheHitTokens) +
-							' · 未命中 ' +
-							compactTokens(today.cacheMissTokens),
+						label: T.input,
+						value: T.hitMiss(compactTokens(today.cacheHitTokens), compactTokens(today.cacheMissTokens)),
 					});
-					cardRows.push({ label: '输出', value: compactTokens(today.outputTokens) });
+					cardRows.push({ label: T.output, value: compactTokens(today.outputTokens) });
 				}
-				cardRows.push({ label: '峰谷', value: (peak ? '高峰' : '低谷') + ' · ' + countdown });
+				cardRows.push({ label: T.rate, value: T.rateValue(peak, countdown) });
 				cardRows.push({
-					label: '更新',
+					label: T.updated,
 					value: clockOf(snapshot.balanceAt) + ' · ' + sourceLabel(snapshot.balanceSource),
 				});
 			}
@@ -468,19 +668,14 @@ window.__ModuleLoader__.load({
 			if (today && today.officialError) {
 				cardNotes.push({
 					key: 'official',
-					text: (officialSource ? '官方用量刷新失败：' : '官方用量不可用：') + today.officialError,
+					text:
+						(officialSource ? T.officialRefreshFailed : T.officialUnavailable) +
+						describeError(today.officialErrorCode, today.officialErrorStatus, today.officialError),
 					error: false,
 				});
 			}
 
-			const aria =
-				'DeepSeek 余额 ' +
-				balance +
-				'，今日' +
-				(officialSource ? '消费 ' : '估算消费 ≈') +
-				todayCost +
-				'，当前' +
-				(peak ? '高峰时段' : '低谷时段');
+			const aria = T.aria(balance, todayCost, officialSource, peak);
 
 			const readoutStyle = Object.assign(
 				{},
@@ -494,8 +689,12 @@ window.__ModuleLoader__.load({
 			// The card hangs above the readout, right-aligned to its edge, so it
 			// never moves the footer row and closes with the pointer leaving the pill.
 			const cardStyle = Object.assign({}, CSS.card, {
-				left: (placement ? placement.left + placement.width : 8) + 'px',
+				left: (placement ? placement.cardRight : 8) + 'px',
 				top: (placement ? placement.top : 8) + 'px',
+				maxWidth: (placement ? placement.cardMaxWidth : 300) + 'px',
+				minWidth: placement
+					? Math.min(LOCALE === 'en' ? 232 : 196, placement.cardMaxWidth) + 'px'
+					: undefined,
 				transform: 'translate(-100%, calc(-100% - 6px))',
 			});
 
@@ -529,10 +728,10 @@ window.__ModuleLoader__.load({
 							hideCard();
 						},
 					},
-					h('span', { style: CSS.label }, '余额'),
+					compact ? null : h('span', { style: CSS.label }, T.balance),
 					h('span', { style: error && snapshot == null ? CSS.errorValue : CSS.value }, balance),
 					h('span', { style: CSS.dot }, '·'),
-					h('span', { style: CSS.label }, '今日'),
+					compact ? null : h('span', { style: CSS.label }, T.today),
 					h(
 						'span',
 						{ style: error && snapshot == null ? CSS.errorValue : CSS.value },
@@ -552,11 +751,11 @@ window.__ModuleLoader__.load({
 											h('span', { style: CSS.cardValue }, row.value),
 										),
 									)
-								: h('span', { style: CSS.cardNote }, '正在读取…'),
+								: h('span', { style: CSS.cardNote }, T.loading),
 							cardNotes.map((note) =>
 								h('span', { key: note.key, style: note.error ? CSS.cardError : CSS.cardNote }, note.text),
 							),
-							refreshing ? h('span', { key: 'refreshing', style: CSS.cardNote }, '刷新中…') : null,
+							refreshing ? h('span', { key: 'refreshing', style: CSS.cardNote }, T.refreshing) : null,
 						)
 					: null,
 			);
@@ -573,7 +772,7 @@ window.__ModuleLoader__.load({
 						name: 'sidebar.footer.action',
 						id: 'dsh-sidebar-wallet',
 						order: 40,
-						label: () => '侧边栏钱包',
+						label: () => T.title,
 					},
 					Readout,
 				),

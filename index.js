@@ -190,9 +190,10 @@ const MAX_EXPORT_BYTES = 64 * 1024 * 1024
 const MAX_ZIP_OUTPUT_BYTES = 32 * 1024 * 1024
 const MAX_ZIP_ENTRIES = 32
 
-function usageError(code, message) {
+function usageError(code, message, status) {
   const error = new Error(message)
   error.code = code
+  if (Number.isFinite(status)) error.status = status
   return error
 }
 
@@ -339,9 +340,9 @@ async function fetchOfficialTodayUsage(root) {
     throw usageError('NETWORK', `官方用量接口请求失败：${String(err?.message || err).slice(0, 120)}`)
   }
   if (response.status === 401 || response.status === 403) {
-    throw usageError('AUTH', `官方用量接口拒绝访问（HTTP ${response.status}）`)
+    throw usageError('AUTH', `官方用量接口拒绝访问（HTTP ${response.status}）`, response.status)
   }
-  if (response.status !== 200) throw usageError('HTTP', `官方用量接口返回 HTTP ${response.status}`)
+  if (response.status !== 200) throw usageError('HTTP', `官方用量接口返回 HTTP ${response.status}`, response.status)
 
   let buffer
   try {
@@ -431,6 +432,8 @@ export default {
     const state = {
       balance: null, // { amount, currency, source, at }
       balanceError: null,
+      balanceErrorCode: null,
+      balanceErrorStatus: null,
       lastPoll: 0,
       refreshing: false,
       todayDay: beijingDayKey(Date.now()),
@@ -438,8 +441,8 @@ export default {
       todayScanned: false,
       todayScannedAt: 0,
       scanning: false,
-      /** Official Platform reading: { value, error, at, lastTry, inflight }. */
-      official: { value: null, error: null, at: 0, lastTry: 0, inflight: null },
+      /** Official Platform reading: { value, error, code, status, at, lastTry, inflight }. */
+      official: { value: null, error: null, code: null, status: null, at: 0, lastTry: 0, inflight: null },
       /** Starts the effect-owned background refresh chain; set while mounted. */
       startRefresh: null,
     }
@@ -482,14 +485,18 @@ export default {
             headers: { Authorization: `Bearer ${key.value}` },
             signal: AbortSignal.timeout(10_000),
           })
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          if (!res.ok) throw usageError('HTTP', `HTTP ${res.status}`, res.status)
           const data = await res.json()
           const info = Array.isArray(data?.balance_infos) ? data.balance_infos[0] : null
           const amount = Number(info?.total_balance ?? data?.total_balance)
-          if (!Number.isFinite(amount)) throw new Error('余额接口返回结构异常')
+          if (!Number.isFinite(amount)) throw usageError('SHAPE', '余额接口返回结构异常')
           state.balanceError = null
+          state.balanceErrorCode = null
+          state.balanceErrorStatus = null
           return { amount, currency: String(info?.currency || 'CNY'), source: 'apikey', at: Date.now() }
         } catch (err) {
+          state.balanceErrorCode = err?.code ?? 'NETWORK'
+          state.balanceErrorStatus = Number.isFinite(err?.status) ? err.status : null
           state.balanceError = `余额接口请求失败：${String(err?.message || err).slice(0, 160)}`
         }
       }
@@ -497,10 +504,14 @@ export default {
       const account = await accountBalance()
       if (account) {
         state.balanceError = null
+        state.balanceErrorCode = null
+        state.balanceErrorStatus = null
         return account
       }
       if (key?.value === undefined && state.balanceError === null) {
         state.balanceError = '未配置 DEEPSEEK_API_KEY，且未登录 DeepSeek 账号'
+        state.balanceErrorCode = 'NO_KEY'
+        state.balanceErrorStatus = null
       }
       return null
     }
@@ -526,9 +537,13 @@ export default {
           const value = await fetchOfficialTodayUsage(root)
           state.official.value = value
           state.official.error = null
+          state.official.code = null
+          state.official.status = null
           state.official.at = Date.now()
         } catch (err) {
           state.official.error = String(err?.message || err).slice(0, 160)
+          state.official.code = err?.code ?? 'UNKNOWN'
+          state.official.status = Number.isFinite(err?.status) ? err.status : null
         } finally {
           state.official.inflight = null
           state.official.lastTry = Date.now()
@@ -599,7 +614,7 @@ export default {
         state.todayDay = key
         state.today = emptyAggregate()
         state.todayScanned = false
-        state.official = { value: null, error: null, at: 0, lastTry: 0, inflight: null }
+        state.official = { value: null, error: null, code: null, status: null, at: 0, lastTry: 0, inflight: null }
         void ensureOfficial()
       }
     }
@@ -691,6 +706,8 @@ export default {
       const [official] = await Promise.all([
         ensureOfficial(force).catch(() => state.official),
         ensureBalance(force).catch((err) => {
+          state.balanceErrorCode = err?.code ?? 'NETWORK'
+          state.balanceErrorStatus = Number.isFinite(err?.status) ? err.status : null
           state.balanceError = String(err?.message || err).slice(0, 160)
           return state.balance
         }),
@@ -725,6 +742,8 @@ export default {
               outputTokens: local.outputTokens,
               officialAt: null,
               officialError: official.error,
+              officialErrorCode: official.code,
+              officialErrorStatus: official.status,
               scanned: state.todayScanned,
               scannedAt: state.todayScannedAt,
               byModel,
@@ -740,6 +759,8 @@ export default {
               outputTokens: officialValue.output,
               officialAt: officialValue.at,
               officialError: official.error,
+              officialErrorCode: official.code,
+              officialErrorStatus: official.status,
               scanned: state.todayScanned,
               scannedAt: state.todayScannedAt,
               byModel,
@@ -751,6 +772,8 @@ export default {
         balanceSource: state.balance?.source ?? null,
         balanceAt: state.balance?.at ?? null,
         balanceError: state.balanceError,
+        balanceErrorCode: state.balanceErrorCode,
+        balanceErrorStatus: state.balanceErrorStatus,
         today: todayPayload,
         period: {
           peak: isPeak(now),
