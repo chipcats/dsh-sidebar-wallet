@@ -112,12 +112,43 @@ test('local estimate is marked with ≈ and used when official fails', () => {
   }
 })
 
+test('cache hit rate row shows the host-computed ratio', () => {
+  const snapshot = snapshotFixture()
+  const zh = mountClient('zh-CN').render(readoutPresets({ snapshot, open: true }))
+  assert.ok(zh.texts.includes('缓存'), 'zh cache label')
+  assert.ok(zh.texts.includes('98.5%'), 'zh cache ratio')
+  const en = mountClient('en-US').render(readoutPresets({ snapshot, open: true }))
+  assert.ok(en.texts.includes('Cache'), 'en cache label')
+  assert.ok(en.texts.includes('98.5%'), 'en cache ratio')
+})
+
+test('cache hit rate row is hidden when there are no input tokens', () => {
+  const snapshot = snapshotFixture({
+    today: { cacheHitRate: null, cacheHitTokens: 0, cacheMissTokens: 0 },
+  })
+  const zh = mountClient('zh-CN').render(readoutPresets({ snapshot, open: true }))
+  assert.ok(!zh.texts.includes('缓存'), 'no cache row without a ratio')
+})
+
+test('estimate cache hit rate carries the ≈ marker', () => {
+  const snapshot = snapshotFixture({
+    today: {
+      source: 'estimate',
+      cacheHitRate: 0.5,
+      officialError: 'raw host error',
+      officialErrorCode: 'NETWORK',
+    },
+  })
+  const zh = mountClient('zh-CN').render(readoutPresets({ snapshot, open: true }))
+  assert.ok(zh.texts.includes('≈50.0%'), 'estimate ratio: ' + JSON.stringify(zh.texts))
+})
+
 test('zh and en dictionaries keep the same keys', () => {
   const zh = textKeys('zh')
   const en = textKeys('en')
   assert.deepEqual([...zh.topKeys].sort(), [...en.topKeys].sort())
   assert.deepEqual([...zh.errorKeys].sort(), [...en.errorKeys].sort())
-  for (const key of ['title', 'balance', 'today', 'input', 'output', 'rate', 'updated', 'aria']) {
+  for (const key of ['title', 'balance', 'today', 'input', 'output', 'cache', 'rate', 'updated', 'aria']) {
     assert.ok(zh.topKeys.includes(key), 'missing zh key: ' + key)
   }
   assert.ok(zh.errorKeys.length >= 9, 'zh error codes are present')

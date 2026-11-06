@@ -52,6 +52,7 @@ window.__ModuleLoader__.load({
 				today: '今日',
 				input: '输入',
 				output: '输出',
+				cache: '缓存',
 				rate: '峰谷',
 				updated: '更新',
 				calls: (count) => ' · ' + count + ' 次',
@@ -91,6 +92,7 @@ window.__ModuleLoader__.load({
 				today: 'Today',
 				input: 'Input',
 				output: 'Output',
+				cache: 'Cache',
 				rate: 'Rate',
 				updated: 'Updated',
 				calls: (count) => ' · ' + count + ' calls',
@@ -209,6 +211,14 @@ window.__ModuleLoader__.load({
 			if (n >= 1_000_000) return (n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1) + 'M';
 			if (n >= 1_000) return (n / 1_000).toFixed(n >= 100_000 ? 0 : 1) + 'K';
 			return String(n);
+		}
+
+		/** `98.5%` from a 0..1 ratio, or null when the Host could not compute it. */
+		function cacheRateText(rate, estimate) {
+			if (typeof rate !== 'number' || !Number.isFinite(rate)) return null;
+			const percent = Math.min(100, Math.max(0, rate * 100));
+			const text = percent === 100 ? '100%' : percent.toFixed(1) + '%';
+			return (estimate ? '≈' : '') + text;
 		}
 
 		function clockOf(ms) {
@@ -655,6 +665,8 @@ window.__ModuleLoader__.load({
 						value: T.hitMiss(compactTokens(today.cacheHitTokens), compactTokens(today.cacheMissTokens)),
 					});
 					cardRows.push({ label: T.output, value: compactTokens(today.outputTokens) });
+					const cacheRate = cacheRateText(today.cacheHitRate, !officialSource);
+					if (cacheRate) cardRows.push({ label: T.cache, value: cacheRate });
 				}
 				cardRows.push({ label: T.rate, value: T.rateValue(peak, countdown) });
 				cardRows.push({

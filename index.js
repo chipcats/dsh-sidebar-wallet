@@ -164,6 +164,12 @@ function round6(value) {
   return Math.round(value * 1e6) / 1e6
 }
 
+/** Cache hit ratio over input tokens, or null when no input tokens were seen. */
+function cacheHitRateOf(hit, miss) {
+  const total = (Number(hit) || 0) + (Number(miss) || 0)
+  return total > 0 ? (Number(hit) || 0) / total : null
+}
+
 // ---------------------------------------------------------------------------
 // Official today usage (Platform web API, authenticated by the signed-in account)
 // ---------------------------------------------------------------------------
@@ -378,6 +384,7 @@ async function fetchOfficialTodayUsage(root) {
   return {
     ...aggregate,
     cost: round6(aggregate.cost),
+    hitRate: cacheHitRateOf(aggregate.cacheHit, aggregate.cacheMiss),
     currency: 'CNY',
     at: Date.now(),
   }
@@ -739,6 +746,7 @@ export default {
               tokens: local.inputTokens + local.cacheReadTokens + local.cacheWriteTokens + local.outputTokens,
               cacheHitTokens: local.cacheReadTokens + local.cacheWriteTokens,
               cacheMissTokens: local.inputTokens,
+              cacheHitRate: cacheHitRateOf(local.cacheReadTokens, local.inputTokens),
               outputTokens: local.outputTokens,
               officialAt: null,
               officialError: official.error,
@@ -756,6 +764,7 @@ export default {
               tokens: officialValue.tokens,
               cacheHitTokens: officialValue.cacheHit,
               cacheMissTokens: officialValue.cacheMiss,
+              cacheHitRate: officialValue.hitRate,
               outputTokens: officialValue.output,
               officialAt: officialValue.at,
               officialError: official.error,

@@ -121,6 +121,7 @@ export function snapshotFixture(overrides = {}) {
     requests: 56,
     cacheHitTokens: 8_600_000,
     cacheMissTokens: 128_000,
+    cacheHitRate: 0.985,
     outputTokens: 92_400,
     officialError: null,
     officialErrorCode: null,
