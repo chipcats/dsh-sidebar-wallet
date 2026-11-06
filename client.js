@@ -33,17 +33,25 @@ window.__ModuleLoader__.load({
 		const POLL_MS = 60_000;
 
 		// --- wording ----------------------------------------------------------
-		// The UI follows the page language: Chinese for zh*, English otherwise.
-		// The Host ships structured error codes so every user-visible string stays
-		// in this table instead of leaking into payloads.
-		const LOCALE = (() => {
+		// The UI follows the DSH interface language: the shell's locale plugin points
+		// `<html lang>` at the active locale ("zh-CN" for Chinese, "en", "es", ...), so
+		// reading that attribute keeps the readout in step with the Language setting
+		// instead of the OS locale. navigator.language is only a fallback.
+		function detectLocale() {
 			try {
-				const lang = String((typeof navigator !== 'undefined' && navigator.language) || 'zh');
-				return /^zh/i.test(lang) ? 'zh' : 'en';
+				const htmlLang =
+					typeof document !== 'undefined' && document.documentElement ? document.documentElement.lang : '';
+				const source = String(htmlLang || (typeof navigator !== 'undefined' && navigator.language) || 'zh');
+				return /^zh/i.test(source) ? 'zh' : 'en';
 			} catch {
 				return 'zh';
 			}
-		})();
+		}
+
+		/** Locale tag used for time formatting. */
+		function localeTag(locale) {
+			return locale === 'zh' ? 'zh-CN' : 'en-GB';
+		}
 
 		const TEXT = {
 			zh: {
@@ -128,13 +136,10 @@ window.__ModuleLoader__.load({
 			},
 		};
 
-		const T = TEXT[LOCALE];
-		const LOCALE_TAG = LOCALE === 'zh' ? 'zh-CN' : 'en-GB';
-
 		/** Localized reason for a Host error code, with the HTTP status when known. */
-		function describeError(code, status, fallback) {
-			const reason = (T.errors && T.errors[code]) || null;
-			let text = reason || fallback || T.errors.UNKNOWN;
+		function describeError(code, status, fallback, texts) {
+			const reason = (texts.errors && texts.errors[code]) || null;
+			let text = reason || fallback || texts.errors.UNKNOWN;
 			if (typeof status === 'number' && Number.isFinite(status)) text += ' (HTTP ' + status + ')';
 			return text;
 		}
@@ -221,18 +226,18 @@ window.__ModuleLoader__.load({
 			return (estimate ? '≈' : '') + text;
 		}
 
-		function clockOf(ms) {
+		function clockOf(ms, tag) {
 			if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—';
 			try {
-				return new Date(ms).toLocaleTimeString(LOCALE_TAG, { hour12: false });
+				return new Date(ms).toLocaleTimeString(tag, { hour12: false });
 			} catch {
 				return '—';
 			}
 		}
 
-		function sourceLabel(source) {
-			if (source === 'apikey') return T.sourceApiKey;
-			if (source === 'account') return T.sourceAccount;
+		function sourceLabel(source, texts) {
+			if (source === 'apikey') return texts.sourceApiKey;
+			if (source === 'account') return texts.sourceAccount;
 			return '—';
 		}
 
@@ -300,7 +305,6 @@ window.__ModuleLoader__.load({
 				display: 'flex',
 				flexDirection: 'column',
 				gap: '5px',
-				minWidth: LOCALE === 'en' ? '232px' : '196px',
 				maxWidth: '300px',
 				margin: 0,
 				padding: '9px 11px 8px',
@@ -324,7 +328,6 @@ window.__ModuleLoader__.load({
 				gap: '10px',
 			},
 			cardLabel: {
-				flex: LOCALE === 'en' ? '0 0 56px' : '0 0 32px',
 				fontSize: '11px',
 				color: 'var(--dsw-alias-label-secondary)',
 			},
@@ -472,6 +475,9 @@ window.__ModuleLoader__.load({
 			/** True when the account row has no room for the labelled readout. */
 			const [compact, setCompact] = useState(false);
 			const fullWidth = useRef(0);
+			/** UI locale follows the shell's `<html lang>`; see detectLocale. */
+			const [locale, setLocale] = useState(() => detectLocale());
+			const textsRef = useRef(TEXT[locale]);
 
 			const showCard = () => {
 				clearTimeout(openTimer.current);
@@ -494,6 +500,7 @@ window.__ModuleLoader__.load({
 					if (inFlight.current) return;
 					inFlight.current = true;
 					if (force) setRefreshing(true);
+					const texts = textsRef.current;
 					try {
 						const res = await fetch('/dsh-sidebar-wallet/state.json' + (force ? '?refresh=1' : ''), {
 							headers: { accept: 'application/json' },
@@ -504,15 +511,15 @@ window.__ModuleLoader__.load({
 							setSnapshot(body);
 							setError(
 								body.balanceError
-									? T.balanceFailed +
-											describeError(body.balanceErrorCode, body.balanceErrorStatus, body.balanceError)
+									? texts.balanceFailed +
+											describeError(body.balanceErrorCode, body.balanceErrorStatus, body.balanceError, texts)
 									: null,
 							);
 						} else {
-							setError(T.readFailed);
+							setError(texts.readFailed);
 						}
 					} catch (err) {
-						if (alive) setError(T.readFailed);
+						if (alive) setError(texts.readFailed);
 					} finally {
 						inFlight.current = false;
 						if (alive) setRefreshing(false);
@@ -533,6 +540,28 @@ window.__ModuleLoader__.load({
 				const timer = setInterval(() => setNow(Date.now()), 1000);
 				return () => clearInterval(timer);
 			}, []);
+
+			// Follow the DSH interface language: the shell's locale plugin rewrites
+			// `<html lang>`, so watch that attribute instead of freezing the locale.
+			useEffect(() => {
+				const sync = () => setLocale(detectLocale());
+				const root = typeof document !== 'undefined' ? document.documentElement : null;
+				const observer = root && typeof MutationObserver !== 'undefined' ? new MutationObserver(sync) : null;
+				if (observer) observer.observe(root, { attributes: true, attributeFilter: ['lang'] });
+				window.addEventListener('focus', sync);
+				return () => {
+					if (observer) observer.disconnect();
+					window.removeEventListener('focus', sync);
+				};
+			}, []);
+
+			// A language switch changes every label width: reset the compact decision
+			// and let the placement effect re-measure with the new copy.
+			useEffect(() => {
+				textsRef.current = TEXT[locale];
+				fullWidth.current = 0;
+				setCompact(false);
+			}, [locale]);
 
 			// Drop a pending reveal timer when the readout unmounts.
 			useEffect(() => () => clearTimeout(openTimer.current), []);
@@ -638,10 +667,12 @@ window.__ModuleLoader__.load({
 					window.removeEventListener('focus', onFocus);
 					for (const timer of settles) clearTimeout(timer);
 				};
-			}, [wide, compact]);
+			}, [wide, compact, locale]);
 
 			if (!wide) return null;
 
+			const T = TEXT[locale];
+			const LOCALE_TAG = localeTag(locale);
 			const peak = isPeak(now);
 			const countdown = humanDuration(secondsToSwitch(now));
 			const currency = (snapshot && snapshot.currency) || 'CNY';
@@ -671,7 +702,7 @@ window.__ModuleLoader__.load({
 				cardRows.push({ label: T.rate, value: T.rateValue(peak, countdown) });
 				cardRows.push({
 					label: T.updated,
-					value: clockOf(snapshot.balanceAt) + ' · ' + sourceLabel(snapshot.balanceSource),
+					value: clockOf(snapshot.balanceAt, LOCALE_TAG) + ' · ' + sourceLabel(snapshot.balanceSource, T),
 				});
 			}
 
@@ -682,7 +713,7 @@ window.__ModuleLoader__.load({
 					key: 'official',
 					text:
 						(officialSource ? T.officialRefreshFailed : T.officialUnavailable) +
-						describeError(today.officialErrorCode, today.officialErrorStatus, today.officialError),
+						describeError(today.officialErrorCode, today.officialErrorStatus, today.officialError, T),
 					error: false,
 				});
 			}
@@ -705,7 +736,7 @@ window.__ModuleLoader__.load({
 				top: (placement ? placement.top : 8) + 'px',
 				maxWidth: (placement ? placement.cardMaxWidth : 300) + 'px',
 				minWidth: placement
-					? Math.min(LOCALE === 'en' ? 232 : 196, placement.cardMaxWidth) + 'px'
+					? Math.min(locale === 'en' ? 232 : 196, placement.cardMaxWidth) + 'px'
 					: undefined,
 				transform: 'translate(-100%, calc(-100% - 6px))',
 			});
@@ -759,7 +790,15 @@ window.__ModuleLoader__.load({
 										h(
 											'span',
 											{ key: row.label, style: CSS.cardRow },
-											h('span', { style: CSS.cardLabel }, row.label),
+											h(
+												'span',
+												{
+													style: Object.assign({}, CSS.cardLabel, {
+														flex: locale === 'en' ? '0 0 56px' : '0 0 32px',
+													}),
+												},
+												row.label,
+											),
 											h('span', { style: CSS.cardValue }, row.value),
 										),
 									)
@@ -784,7 +823,7 @@ window.__ModuleLoader__.load({
 						name: 'sidebar.footer.action',
 						id: 'dsh-sidebar-wallet',
 						order: 40,
-						label: () => T.title,
+						label: () => TEXT[detectLocale()].title,
 					},
 					Readout,
 				),

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<!--
+  English sample-data mock of the sidebar readout and its hover card.
+  Rendered to assets/preview-en.png by tools/preview/make-preview.mjs.
+  This is NOT a screenshot: edit the values / styles here, then re-run the script.
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: #fdfdfd; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding: 42px 46px 42px 42px;
+    width: 280px;
+    box-sizing: content-box;
+  }
+  .wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 14px; }
+  .card {
+    display: flex; flex-direction: column; gap: 5px;
+    min-width: 232px; max-width: 300px;
+    padding: 9px 11px 8px;
+    border: 1px solid #e4e5e7;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #0f1115;
+    white-space: nowrap;
+    box-sizing: border-box;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .row { display: flex; align-items: baseline; gap: 10px; }
+  .label {
+    flex: 0 0 56px;
+    font-size: 11px;
+    color: #61666b;
+  }
+  .value {
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: #0f1115;
+  }
+  .pill { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 6px; border-radius: 7px; line-height: 16px; }
+  .pill .lbl { font-size: 11px; color: #61666b; }
+  .pill .val { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: #0f1115; }
+  .pill .dot { font-size: 11px; color: #61666b; }
+</style></head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="row"><span class="label">Balance</span><span class="value">¥128.00</span></div>
+      <div class="row"><span class="label">Today</span><span class="value">¥12.34 · 56 calls</span></div>
+      <div class="row"><span class="label">Input</span><span class="value">Hit 8.6M · Miss 128K</span></div>
+      <div class="row"><span class="label">Output</span><span class="value">92.4K</span></div>
+      <div class="row"><span class="label">Cache</span><span class="value">98.5%</span></div>
+      <div class="row"><span class="label">Rate</span><span class="value">Off-peak · peak in 2h14m</span></div>
+      <div class="row"><span class="label">Updated</span><span class="value">21:05:32 · API key</span></div>
+    </div>
+    <div class="pill">
+      <span class="lbl">Balance</span><span class="val">¥128.00</span><span class="dot">·</span><span class="lbl">Today</span><span class="val">¥12.34</span>
+    </div>
+  </div>
+</body></html>

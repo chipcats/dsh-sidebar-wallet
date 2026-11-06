@@ -33,10 +33,15 @@ function makeReact() {
  * `presets` is indexed by `useState` call order: 0 snapshot, 1 error,
  * 2 placement, 3 hovered, 4 open, 5 now, 6 refreshing, 7 compact.
  */
-export function mountClient(language) {
+export function mountClient(language, options = {}) {
   let factory = null
-  const pageWindow = { __ModuleLoader__: { load: (options) => { factory = options.factory } } }
+  const pageWindow = {
+    __ModuleLoader__: { load: (options) => { factory = options.factory } },
+    addEventListener: NOOP,
+    removeEventListener: NOOP,
+  }
   const navigator = { language }
+  const htmlLang = options.htmlLang ?? (/^zh/i.test(language) ? 'zh-CN' : 'en')
   const React = makeReact()
   let hookIndex = 0
   let presets = []
@@ -51,11 +56,12 @@ export function mountClient(language) {
     if (name === 'react') return React
     throw new Error('unexpected require: ' + name)
   }
-  const noDocument = {
+  const pageDocument = {
     addEventListener: NOOP,
     removeEventListener: NOOP,
     hidden: false,
     querySelector: () => null,
+    documentElement: { lang: htmlLang },
   }
   const run = new Function(
     'window',
@@ -67,7 +73,7 @@ export function mountClient(language) {
     'clearInterval',
     CLIENT_SOURCE,
   )
-  run(pageWindow, navigator, noDocument, undefined, NOOP, () => 0, NOOP)
+  run(pageWindow, navigator, pageDocument, undefined, NOOP, () => 0, NOOP)
 
   if (!factory) throw new Error('client.js did not register a module factory')
   const exports = factory(requireFn)

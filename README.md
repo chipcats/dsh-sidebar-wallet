@@ -1,36 +1,38 @@
-# 侧边栏钱包 · dsh-sidebar-wallet
+# Sidebar Wallet · dsh-sidebar-wallet
 
-在 DeepSeek Harness 侧边栏底部、账户行（头像那一行）的最右端显示一行读数：**余额** 与 **今日消费**；悬停展开明细卡片，点击立即刷新。
+**English** | [简体中文](README.zh-CN.md)
+
+A one-line readout at the far right end of the DeepSeek Harness sidebar account row: **balance** and **today's spend**. Hover for the details card, click to refresh.
 
 ```
-余额 ¥128.00 · 今日 ¥12.34
+Balance ¥128.00 · Today ¥12.34
 ```
 
-![侧边栏读数与悬停卡片](assets/preview.png)
+![Sidebar readout and hover card (English)](assets/preview-en.png)
 
-*界面示意（示例数据，按组件样式渲染）*
+*Sample data rendered from the component styles — not a screenshot.*
 
-## 功能
+## Features
 
-- **余额**：官方 `GET /user/balance`——优先用已保存的 `DEEPSEEK_API_KEY`，取不到时退回当前登录的 DeepSeek 账号钱包。
-- **今日消费**：DeepSeek 后台官方用量口径（北京时间 0 点起算，与网页控制台「用量」页一致）；官方不可用时回退本机会话日志估算，读数带 `≈`。
-- **悬停 / 点击**：悬停显示余额、今日消费与请求数、输入（命中 / 未命中）、输出、峰谷倒计时、更新时间与来源；点击立即刷新。
-- **语言**：界面文案跟随页面语言自动切换（中文 / English）。
+- **Balance**: the official `GET /user/balance` — uses the saved `DEEPSEEK_API_KEY` first, falling back to the signed-in DeepSeek account wallet.
+- **Today's spend**: the official Platform usage export (Beijing calendar day, same numbers as the console's Usage page); falls back to a local session-log estimate, marked with `≈`.
+- **Hover / click**: hover shows balance, today's spend and request count, input (hit / miss) tokens, output tokens, cache hit rate, the peak/off-peak countdown, update time and source; click refreshes.
+- **Language**: the readout follows the DSH interface language (Chinese / English) and switches live with the Language setting.
 
-## 安装
+## Install
 
-要求 DeepSeek Harness ≥ 0.2.1-rc.1（实测 0.2.1-rc.5）：
+Requires DeepSeek Harness ≥ 0.2.1-rc.1 (tested on 0.2.1-rc.5):
 
 ```bash
 dsh plugin --profile desktop add github:chipcats/dsh-sidebar-wallet
 ```
 
-## 说明
+## Notes
 
-- 官方用量来自 platform.deepseek.com 的网页私有接口 `api/v0/usage/export`（非公开 API）：插件通过 DSH 已登录账号的 `deepseekAccount.getPlatformSession()` 取用，无需手动粘贴 token；接口不可用时自动回退本地估算，不会让读数消失。
-- 隐私与安全：只访问 `api.deepseek.com`（余额）和 `platform.deepseek.com`（用量）两个域名；令牌只在 Host 进程内存中使用，不下发浏览器、不落盘；只注册一个只读路由 `GET /dsh-sidebar-wallet/state.json`（回环 / 同源校验）。无写入、无遥测、无第三方运行时依赖。
-- 已知限制：官方口径是该账户下全部 API 调用（不区分 Key 或客户端）；未登录 DeepSeek 账号时只显示本地估算；峰谷与节假日表仅用于本地估算和倒计时。
+- The official usage comes from the private Platform web endpoint `api/v0/usage/export` (not a public API): the plugin reads the signed-in account session through DSH's `deepseekAccount.getPlatformSession()`, so no manual token is needed; when it is unavailable the local estimate is used instead and the readout never goes blank.
+- Privacy & security: only two hosts are contacted — `api.deepseek.com` (balance) and `platform.deepseek.com` (usage); tokens stay in the Host process memory and are never sent to the browser or written to disk; the only route is a read-only `GET /dsh-sidebar-wallet/state.json` (loopback / same-origin fence). No writes, no telemetry, no third-party runtime dependencies.
+- Known limits: the official figure covers every API call of the account (any API key or client); without a signed-in account only the local estimate is shown; the peak/off-peak and holiday tables only affect the local estimate and the countdown.
 
-## 许可证
+## License
 
 [MIT](./LICENSE)

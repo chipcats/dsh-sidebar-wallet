@@ -1,6 +1,7 @@
 # 预览图生成
 
-`assets/preview.png` 不是截图，而是 **`preview.html` 用无头 Edge/Chrome 渲染出来的示例图**（示例数据），
+`assets/preview.png`（中文）和 `assets/preview-en.png`（English）不是截图，而是
+**`preview.html` / `preview-en.html` 用无头 Edge/Chrome 渲染出来的示例图**（示例数据），
 再由 `make-preview.mjs` 裁掉多余背景得到。
 
 ## 用法
@@ -11,20 +12,22 @@ node tools/preview/make-preview.mjs
 npm run preview
 ```
 
+默认一次生成两张：`assets/preview.png`（中文）与 `assets/preview-en.png`（English）。
 要求：Node ≥ 20 + 本机安装 Microsoft Edge（或 Chrome/Chromium）。**无任何 npm 依赖**。
 
 可选参数：
 
 | 参数 | 说明 |
 | --- | --- |
-| `--out <file>` | 输出路径，默认 `assets/preview.png` |
+| `--out <file>` | 只生成一张，输出到指定路径 |
+| `--html <file>` | 只生成一张，使用指定的 HTML（默认本目录的 `preview.html`） |
 | `--scale <n>` | 渲染倍率，默认 `2`（最高 4） |
-| `--html <file>` | 换成别的 HTML，默认本目录的 `preview.html` |
 | `--edge <exe>` | 指定浏览器可执行文件（也可用环境变量 `EDGE_PATH`/`CHROME_PATH`） |
 
 ## 改图
 
-直接编辑 `preview.html` 里的示例数值/文案/样式，然后重新跑上面的命令即可。
+直接编辑 `preview.html`（中文）或 `preview-en.html`（English）里的示例数值/文案/样式，
+然后重新跑上面的命令即可。
 
 ## 说明
 

@@ -143,6 +143,20 @@ test('estimate cache hit rate carries the ≈ marker', () => {
   assert.ok(zh.texts.includes('≈50.0%'), 'estimate ratio: ' + JSON.stringify(zh.texts))
 })
 
+test('locale follows the DSH interface language before the OS locale', () => {
+  // DSH 界面语言是中文，而系统/浏览器语言是英文：插件应保持中文。
+  const zhUi = mountClient('en-US', { htmlLang: 'zh-CN' })
+  assert.equal(zhUi.registered.config.label(), '侧边栏钱包')
+  const zhView = zhUi.render(readoutPresets({ snapshot: snapshotFixture() }))
+  assert.ok(zhView.texts.includes('余额'), 'zh copy from html lang')
+
+  // DSH settings = English while the OS locale is Chinese.
+  const enUi = mountClient('zh-CN', { htmlLang: 'en' })
+  assert.equal(enUi.registered.config.label(), 'Sidebar Wallet')
+  const enView = enUi.render(readoutPresets({ snapshot: snapshotFixture() }))
+  assert.ok(enView.texts.includes('Balance'), 'en copy from html lang')
+})
+
 test('zh and en dictionaries keep the same keys', () => {
   const zh = textKeys('zh')
   const en = textKeys('en')
@@ -166,7 +180,10 @@ test('package manifest stays installable', () => {
   assert.equal(pkg.dsh?.bundle?.patch, './cordis.patch.yml')
   assert.equal(pkg.dsh?.client?.platform, 'web')
   assert.ok(fs.existsSync(path.join(REPO_ROOT, 'cordis.patch.yml')), 'cordis.patch.yml exists')
-  for (const file of ['index.js', 'client.js', 'cordis.patch.yml', 'README.md', 'LICENSE']) {
+  for (const asset of ['assets/preview.png', 'assets/preview-en.png']) {
+    assert.ok(fs.existsSync(path.join(REPO_ROOT, asset)), asset + ' exists')
+  }
+  for (const file of ['index.js', 'client.js', 'cordis.patch.yml', 'README.md', 'README.zh-CN.md', 'LICENSE']) {
     assert.ok(pkg.files.includes(file), 'files entry: ' + file)
   }
   // The dev tooling and tests must never ship with the plugin.
@@ -190,6 +207,18 @@ test('client and host agree on the module id and the route path', () => {
   assert.match(HOST_SOURCE, /name = 'dsh-sidebar-wallet'/)
   assert.match(HOST_SOURCE, /path: '\/dsh-sidebar-wallet\/state\.json'/)
   assert.match(read('cordis.patch.yml'), /dsh-sidebar-wallet/)
+})
+
+test('READMEs link to each other and keep their own preview', () => {
+  const en = read('README.md')
+  const zh = read('README.zh-CN.md')
+  assert.ok(fs.existsSync(path.join(REPO_ROOT, 'README.zh-CN.md')), 'README.zh-CN.md exists')
+  assert.ok(en.includes('README.zh-CN.md'), 'English README links to the Chinese one')
+  assert.ok(zh.includes('(README.md)'), 'Chinese README links to the English one')
+  assert.ok(en.includes('assets/preview-en.png'), 'English README shows the English preview')
+  assert.ok(!en.includes('assets/preview.png'), 'English README does not show the Chinese preview')
+  assert.ok(zh.includes('assets/preview.png'), 'Chinese README shows the Chinese preview')
+  assert.ok(!zh.includes('assets/preview-en.png'), 'Chinese README does not show the English preview')
 })
 
 test('runtime files parse', () => {
