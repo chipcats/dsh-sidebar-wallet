@@ -478,6 +478,8 @@ window.__ModuleLoader__.load({
 			/** UI locale follows the shell's `<html lang>`; see detectLocale. */
 			const [locale, setLocale] = useState(() => detectLocale());
 			const textsRef = useRef(TEXT[locale]);
+			/** Last pointer position, used to clear a hover the pill has drifted away from. */
+			const pointer = useRef({ x: Number.NaN, y: Number.NaN, seen: false });
 
 			const showCard = () => {
 				clearTimeout(openTimer.current);
@@ -492,6 +494,54 @@ window.__ModuleLoader__.load({
 				clearTimeout(openTimer.current);
 				setOpen(false);
 			};
+
+			// The pill is right-aligned and re-renders on a timer: its width (and so
+			// its left edge) can change while the pointer sits still, and a sidebar
+			// collapse unmounts it outright. Neither dispatches a mouseleave, which
+			// used to strand the hover background white until the pointer moved
+			// again. Track the pointer, then re-check the pill's rect while hovered.
+			useEffect(() => {
+				const track = (event) => {
+					pointer.current.x = event.clientX;
+					pointer.current.y = event.clientY;
+					pointer.current.seen = true;
+				};
+				window.addEventListener('pointermove', track, { passive: true });
+				return () => window.removeEventListener('pointermove', track);
+			}, []);
+
+			useEffect(() => {
+				if (!hovered) return undefined;
+				const verify = () => {
+					const el = readoutRef.current;
+					const point = pointer.current;
+					if (!el) {
+						clearTimeout(openTimer.current);
+						setHovered(false);
+						setOpen(false);
+						return;
+					}
+					if (!point.seen) return;
+					const rect = el.getBoundingClientRect();
+					const inside =
+						point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
+					if (inside) return;
+					clearTimeout(openTimer.current);
+					setHovered(false);
+					setOpen(false);
+				};
+				const timer = setInterval(verify, 250);
+				return () => clearInterval(timer);
+			}, [hovered]);
+
+			// Collapsing the sidebar removes the pill without a mouseleave; drop the
+			// hover state so expanding again cannot restore a stale white background.
+			useEffect(() => {
+				if (wide) return;
+				clearTimeout(openTimer.current);
+				setHovered(false);
+				setOpen(false);
+			}, [wide]);
 
 			// Poll the Host route; a manual click forces a fresh balance.
 			useEffect(() => {
