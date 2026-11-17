@@ -66,6 +66,8 @@ window.__ModuleLoader__.load({
 				calls: (count) => ' · ' + count + ' 次',
 				hitMiss: (hit, miss) => '命中 ' + hit + ' · 未命中 ' + miss,
 				rateValue: (peak, duration) => (peak ? '高峰' : '低谷') + ' · ' + duration + (peak ? ' 后转谷' : ' 后转峰'),
+				peakHours: '高峰时段',
+				offPeakHours: '低谷时段',
 				sourceApiKey: 'API Key',
 				sourceAccount: '登录账号',
 				loading: '正在读取…',
@@ -106,6 +108,8 @@ window.__ModuleLoader__.load({
 				calls: (count) => ' · ' + count + ' calls',
 				hitMiss: (hit, miss) => 'Hit ' + hit + ' · Miss ' + miss,
 				rateValue: (peak, duration) => (peak ? 'Peak · off-peak in ' : 'Off-peak · peak in ') + duration,
+				peakHours: 'Peak hours',
+				offPeakHours: 'Off-peak hours',
 				sourceApiKey: 'API key',
 				sourceAccount: 'Account',
 				loading: 'Loading…',
@@ -273,22 +277,11 @@ window.__ModuleLoader__.load({
 				cursor: 'pointer',
 				textAlign: 'right',
 			},
-			readoutHover: {
-				background: 'var(--dsw-alias-bg-layer-1)',
-			},
-			label: {
-				fontSize: '11px',
-				color: 'var(--dsw-alias-label-secondary)',
-			},
 			value: {
 				fontSize: '12px',
 				fontWeight: 500,
 				fontVariantNumeric: 'tabular-nums',
 				color: 'var(--dsw-alias-label-primary)',
-			},
-			dot: {
-				fontSize: '11px',
-				color: 'var(--dsw-alias-label-secondary)',
 			},
 			// Peak/off-peak status dot in front of the readout. Both colors come
 			// from the theme, so the dot stays legible in light and dark; the hex
@@ -298,6 +291,8 @@ window.__ModuleLoader__.load({
 				alignSelf: 'center',
 				width: '6px',
 				height: '6px',
+				// Nudge the dot onto the text's optical centre rather than the line box's.
+				marginTop: '1px',
 				borderRadius: '50%',
 				transition: 'background 200ms',
 			},
@@ -430,9 +425,9 @@ window.__ModuleLoader__.load({
 
 		/**
 		 * Viewport coordinates for the readout and its hover card. The card is
-		 * right-aligned to the sidebar column (never to the compact readout, which
-		 * may sit far left of it) and capped to the column width so it can never be
-		 * clipped by the window edge.
+		 * right-aligned to the sidebar column (never to the pill, which may sit
+		 * further left) and capped to the column width so it can never be clipped
+		 * by the window edge.
 		 */
 		function measurePlacement(anchor, readout) {
 			if (!anchor || !readout) return null;
@@ -452,7 +447,6 @@ window.__ModuleLoader__.load({
 				columnRect.right - inlinePadding,
 				layout.controlsLeft === null ? Number.POSITIVE_INFINITY : layout.controlsLeft - 8,
 			);
-			const available = Math.max(0, rightBound - minLeft);
 
 			let top;
 			if (row) top = row.rect.top + (row.rect.height - height) / 2;
@@ -463,7 +457,6 @@ window.__ModuleLoader__.load({
 				top: Math.max(8, Math.round(Math.min(top, columnRect.bottom - height - 4))),
 				width: Math.round(width),
 				height: Math.round(height),
-				available: Math.round(available),
 				cardRight: Math.round(columnRect.right - inlinePadding),
 				cardMaxWidth: Math.max(160, Math.round(columnRect.width - inlinePadding - 8)),
 			};
@@ -478,14 +471,12 @@ window.__ModuleLoader__.load({
 			const [snapshot, setSnapshot] = useState(null);
 			const [error, setError] = useState(null);
 			const [placement, setPlacement] = useState(null);
-			const [hovered, setHovered] = useState(false);
 			const [open, setOpen] = useState(false);
 			const openTimer = useRef(null);
 			const [now, setNow] = useState(() => Date.now());
 			const [refreshing, setRefreshing] = useState(false);
-			/** True when the account row has no room for the labelled readout. */
-			const [compact, setCompact] = useState(false);
-			const fullWidth = useRef(0);
+			/** The pill stays invisible until the first payload (or a read error). */
+			const ready = snapshot !== null || error !== null;
 			/** UI locale follows the shell's `<html lang>`; see detectLocale. */
 			const [locale, setLocale] = useState(() => detectLocale());
 			const textsRef = useRef(TEXT[locale]);
@@ -509,8 +500,8 @@ window.__ModuleLoader__.load({
 			// The pill is right-aligned and re-renders on a timer: its width (and so
 			// its left edge) can change while the pointer sits still, and a sidebar
 			// collapse unmounts it outright. Neither dispatches a mouseleave, which
-			// used to strand the hover background white until the pointer moved
-			// again. Track the pointer, then re-check the pill's rect while hovered.
+			// used to strand the card open. Track the pointer, then re-check the
+			// pill's rect while the card is open.
 			useEffect(() => {
 				const track = (event) => {
 					pointer.current.x = event.clientX;
@@ -522,13 +513,12 @@ window.__ModuleLoader__.load({
 			}, []);
 
 			useEffect(() => {
-				if (!hovered) return undefined;
+				if (!open) return undefined;
 				const verify = () => {
 					const el = readoutRef.current;
 					const point = pointer.current;
 					if (!el) {
 						clearTimeout(openTimer.current);
-						setHovered(false);
 						setOpen(false);
 						return;
 					}
@@ -538,19 +528,16 @@ window.__ModuleLoader__.load({
 						point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
 					if (inside) return;
 					clearTimeout(openTimer.current);
-					setHovered(false);
 					setOpen(false);
 				};
 				const timer = setInterval(verify, 250);
 				return () => clearInterval(timer);
-			}, [hovered]);
+			}, [open]);
 
-			// Collapsing the sidebar removes the pill without a mouseleave; drop the
-			// hover state so expanding again cannot restore a stale white background.
+			// Collapsing the sidebar removes the pill without a mouseleave.
 			useEffect(() => {
 				if (wide) return;
 				clearTimeout(openTimer.current);
-				setHovered(false);
 				setOpen(false);
 			}, [wide]);
 
@@ -616,12 +603,9 @@ window.__ModuleLoader__.load({
 				};
 			}, []);
 
-			// A language switch changes every label width: reset the compact decision
-			// and let the placement effect re-measure with the new copy.
+			// A language switch changes every label width: re-measure with the new copy.
 			useEffect(() => {
 				textsRef.current = TEXT[locale];
-				fullWidth.current = 0;
-				setCompact(false);
 			}, [locale]);
 
 			// Drop a pending reveal timer when the readout unmounts.
@@ -634,7 +618,6 @@ window.__ModuleLoader__.load({
 				const closeCard = () => {
 					clearTimeout(openTimer.current);
 					setOpen(false);
-					setHovered(false);
 				};
 				const onMouseOut = (event) => {
 					if (!event.relatedTarget) closeCard();
@@ -654,30 +637,20 @@ window.__ModuleLoader__.load({
 				};
 			}, []);
 
-			// Place the readout into the account row; re-measure on layout changes.
+			// Place the readout into the account row; re-measure on layout changes and
+			// when the first payload replaces the empty (still invisible) pill.
 			useLayoutEffect(() => {
 				if (!wide) return undefined;
 				let frame = 0;
 				const measure = () => {
 					const next = measurePlacement(anchorRef.current, readoutRef.current);
 					if (!next) return;
-					if (compact) {
-						// The shell may remove its buttons again (e.g. after an update):
-						// restore the labelled form once the row has room for it.
-						const width = fullWidth.current;
-						if (width > 0 && next.available >= width + 12) setCompact(false);
-					} else if (next.width > next.available) {
-						fullWidth.current = next.width;
-						setCompact(true);
-						return;
-					}
 					setPlacement((prev) =>
 						prev &&
 						prev.left === next.left &&
 						prev.top === next.top &&
 						prev.width === next.width &&
-						prev.height === next.height &&
-						prev.available === next.available
+						prev.height === next.height
 							? prev
 							: next,
 					);
@@ -728,7 +701,7 @@ window.__ModuleLoader__.load({
 					window.removeEventListener('focus', onFocus);
 					for (const timer of settles) clearTimeout(timer);
 				};
-			}, [wide, compact, locale]);
+			}, [wide, locale, ready]);
 
 			if (!wide) return null;
 
@@ -759,13 +732,18 @@ window.__ModuleLoader__.load({
 					: (officialSource ? '' : '≈') + todayCost + (requestCount > 0 ? T.calls(requestCount) : '');
 				cardRows.push({ label: T.today, value: todayValue });
 				if (officialSource || (today && today.scanned)) {
+					const hitTokens = Number(today.cacheHitTokens) || 0;
+					const missTokens = Number(today.cacheMissTokens) || 0;
+					const outputTokens = Number(today.outputTokens) || 0;
 					cardRows.push({
 						label: T.input,
-						value: T.hitMiss(compactTokens(today.cacheHitTokens), compactTokens(today.cacheMissTokens)),
+						value:
+							hitTokens + missTokens > 0
+								? T.hitMiss(compactTokens(hitTokens), compactTokens(missTokens))
+								: '—',
 					});
-					cardRows.push({ label: T.output, value: compactTokens(today.outputTokens) });
-					const cacheRate = cacheRateText(today.cacheHitRate, !officialSource);
-					if (cacheRate) cardRows.push({ label: T.cache, value: cacheRate });
+					cardRows.push({ label: T.output, value: outputTokens > 0 ? compactTokens(outputTokens) : '—' });
+					cardRows.push({ label: T.cache, value: cacheRateText(today.cacheHitRate, !officialSource) || '—' });
 				}
 				cardRows.push({ label: T.rate, value: T.rateValue(peak, countdown) });
 				cardRows.push({
@@ -792,9 +770,12 @@ window.__ModuleLoader__.load({
 				{},
 				CSS.readout,
 				placement
-					? { left: placement.left + 'px', top: placement.top + 'px' }
+					? {
+							left: placement.left + 'px',
+							top: placement.top + 'px',
+							visibility: ready ? 'visible' : 'hidden',
+						}
 					: { left: '8px', top: '8px', visibility: 'hidden' },
-				hovered ? CSS.readoutHover : null,
 			);
 
 			// The card hangs above the readout, right-aligned to its edge, so it
@@ -823,32 +804,36 @@ window.__ModuleLoader__.load({
 							if (readoutRefresh) readoutRefresh();
 						},
 						onMouseEnter: () => {
-							setHovered(true);
 							showCard();
 						},
 						onMouseLeave: () => {
-							setHovered(false);
 							hideCard();
 						},
 						onFocus: () => {
-							setHovered(true);
 							showCard();
 						},
 						onBlur: () => {
-							setHovered(false);
 							hideCard();
 						},
 					},
-					h('span', { style: rateDotStyle, 'aria-hidden': 'true' }),
-					compact ? null : h('span', { style: CSS.label }, T.balance),
-					h('span', { style: error && snapshot == null ? CSS.errorValue : CSS.value }, balance),
-					h('span', { style: CSS.dot }, '·'),
-					compact ? null : h('span', { style: CSS.label }, T.today),
-					h(
-						'span',
-						{ style: error && snapshot == null ? CSS.errorValue : CSS.value },
-						pending ? '…' : (officialSource ? '' : '≈') + todayCost,
-					),
+					ready
+						? h('span', {
+								style: rateDotStyle,
+								'aria-hidden': 'true',
+								title: peak ? T.peakHours : T.offPeakHours,
+							})
+						: null,
+					ready
+						? h(
+								'span',
+								{ style: error && snapshot == null ? CSS.errorValue : CSS.value },
+								error && snapshot == null
+									? '—'
+									: pending
+										? '…'
+										: (officialSource ? '' : '≈') + todayCost,
+							)
+						: null,
 				),
 				open && placement
 					? h(

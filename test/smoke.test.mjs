@@ -27,42 +27,46 @@ test('client registers the sidebar.footer.action slot', () => {
   assert.equal(mountClient('en-US').registered.config.label(), 'Sidebar Wallet')
 })
 
-test('pill shows the localized labels in full mode', () => {
+test('pill shows only the status dot and today\'s spend', () => {
   const snapshot = snapshotFixture()
   const zh = mountClient('zh-CN').render(readoutPresets({ snapshot }))
-  assert.ok(zh.texts.includes('余额'), 'zh pill keeps the balance label')
-  assert.ok(zh.texts.includes('今日'), 'zh pill keeps the today label')
-  assert.ok(zh.texts.includes('¥128.00'))
-  assert.ok(zh.texts.includes('¥12.34'))
+  assert.deepEqual(zh.texts, ['¥12.34'], 'zh pill renders the amount only: ' + JSON.stringify(zh.texts))
+  assert.equal(zh.dots.length, 1, 'pill keeps the status dot')
+  assert.ok(zh.order.indexOf('dot') < zh.order.indexOf('text:¥12.34'), 'dot precedes the amount')
 
   const en = mountClient('en-US').render(readoutPresets({ snapshot }))
-  assert.ok(en.texts.includes('Balance'))
-  assert.ok(en.texts.includes('Today'))
+  assert.deepEqual(en.texts, ['¥12.34'], 'en pill renders the amount only: ' + JSON.stringify(en.texts))
 })
 
-test('compact mode drops the pill labels but keeps the amounts', () => {
-  const snapshot = snapshotFixture()
-  const zh = mountClient('zh-CN').render(readoutPresets({ snapshot, compact: true }))
-  assert.ok(!zh.texts.includes('余额'), 'compact pill has no balance label')
-  assert.ok(!zh.texts.includes('今日'), 'compact pill has no today label')
-  assert.ok(zh.texts.includes('¥128.00'))
-  assert.ok(zh.texts.includes('¥12.34'))
+test('pill stays hidden until the first payload arrives', () => {
+  const loading = mountClient('zh-CN').render(readoutPresets({ snapshot: null, error: null }))
+  assert.deepEqual(loading.texts, [], 'nothing rendered while loading')
+  assert.equal(loading.dots.length, 0, 'no dot while loading')
+  assert.equal(loading.buttons[0].style.visibility, 'hidden', 'pill hidden before data')
 })
 
-test('readout carries a peak/off-peak status dot', () => {
+test('pill shows — when the read fails without data', () => {
+  const failed = mountClient('zh-CN').render(readoutPresets({ snapshot: null, error: '读取失败' }))
+  assert.deepEqual(failed.texts, ['—'], 'failed read placeholder')
+  assert.equal(failed.dots.length, 1, 'dot still names the pricing window')
+  assert.equal(failed.buttons[0].style.visibility, 'visible', 'failure is visible')
+})
+
+test('readout carries the peak/off-peak status dot', () => {
   const snapshot = snapshotFixture()
   // 2026-11-13 is a Friday: 10:00 Beijing is peak (09:00-12:00); 12:30 is off-peak.
-  const at = (iso, extra = {}) => readoutPresets({ snapshot, now: Date.parse(iso), ...extra })
+  const at = (iso) => readoutPresets({ snapshot, now: Date.parse(iso) })
   const peak = mountClient('zh-CN').render(at('2026-11-13T10:00:00+08:00'))
   const valley = mountClient('zh-CN').render(at('2026-11-13T12:30:00+08:00'))
-  const compact = mountClient('zh-CN').render(at('2026-11-13T12:30:00+08:00', { compact: true }))
-  for (const [name, view] of [['peak', peak], ['valley', valley], ['compact', compact]]) {
+  for (const [name, view] of [['peak', peak], ['valley', valley]]) {
     assert.equal(view.dots.length, 1, name + ': exactly one status dot')
     assert.equal(view.dots[0]['aria-hidden'], 'true', name + ': dot stays out of the a11y tree')
   }
   assert.match(String(peak.dots[0].style.background), /state-warn/, 'peak dot uses the warn token')
   assert.match(String(valley.dots[0].style.background), /state-success/, 'off-peak dot uses the success token')
-  assert.match(String(compact.dots[0].style.background), /state-success/, 'compact keeps the dot state')
+  assert.equal(peak.dots[0].title, '高峰时段', 'peak dot names the window for pointer users')
+  assert.equal(valley.dots[0].title, '低谷时段', 'off-peak dot names the window')
+  assert.equal(peak.dots[0].style.marginTop, '1px', 'dot carries the optical-centre nudge')
 })
 
 test('hover card lists every row in both languages', () => {
@@ -138,12 +142,17 @@ test('cache hit rate row shows the host-computed ratio', () => {
   assert.ok(en.texts.includes('98.5%'), 'en cache ratio')
 })
 
-test('cache hit rate row is hidden when there are no input tokens', () => {
+test('token rows fall back to — when there is no usage yet', () => {
   const snapshot = snapshotFixture({
-    today: { cacheHitRate: null, cacheHitTokens: 0, cacheMissTokens: 0 },
+    today: { cacheHitRate: null, cacheHitTokens: 0, cacheMissTokens: 0, outputTokens: 0 },
   })
   const zh = mountClient('zh-CN').render(readoutPresets({ snapshot, open: true }))
-  assert.ok(!zh.texts.includes('缓存'), 'no cache row without a ratio')
+  for (const label of ['输入', '输出', '缓存']) {
+    assert.ok(zh.texts.includes(label), 'row stays visible: ' + label)
+  }
+  assert.ok(!zh.texts.includes('命中 0 · 未命中 0'), 'no fake zero row')
+  const placeholders = zh.texts.filter((text) => text === '—').length
+  assert.ok(placeholders >= 3, 'input/output/cache show —: ' + JSON.stringify(zh.texts))
 })
 
 test('estimate cache hit rate carries the ≈ marker', () => {
@@ -163,13 +172,13 @@ test('locale follows the DSH interface language before the OS locale', () => {
   // DSH 界面语言是中文，而系统/浏览器语言是英文：插件应保持中文。
   const zhUi = mountClient('en-US', { htmlLang: 'zh-CN' })
   assert.equal(zhUi.registered.config.label(), '侧边栏钱包')
-  const zhView = zhUi.render(readoutPresets({ snapshot: snapshotFixture() }))
+  const zhView = zhUi.render(readoutPresets({ snapshot: snapshotFixture(), open: true }))
   assert.ok(zhView.texts.includes('余额'), 'zh copy from html lang')
 
   // DSH settings = English while the OS locale is Chinese.
   const enUi = mountClient('zh-CN', { htmlLang: 'en' })
   assert.equal(enUi.registered.config.label(), 'Sidebar Wallet')
-  const enView = enUi.render(readoutPresets({ snapshot: snapshotFixture() }))
+  const enView = enUi.render(readoutPresets({ snapshot: snapshotFixture(), open: true }))
   assert.ok(enView.texts.includes('Balance'), 'en copy from html lang')
 })
 
@@ -178,7 +187,7 @@ test('zh and en dictionaries keep the same keys', () => {
   const en = textKeys('en')
   assert.deepEqual([...zh.topKeys].sort(), [...en.topKeys].sort())
   assert.deepEqual([...zh.errorKeys].sort(), [...en.errorKeys].sort())
-  for (const key of ['title', 'balance', 'today', 'input', 'output', 'cache', 'rate', 'updated', 'aria']) {
+  for (const key of ['title', 'balance', 'today', 'input', 'output', 'cache', 'rate', 'peakHours', 'offPeakHours', 'updated', 'aria']) {
     assert.ok(zh.topKeys.includes(key), 'missing zh key: ' + key)
   }
   assert.ok(zh.errorKeys.length >= 9, 'zh error codes are present')

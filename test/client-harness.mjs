@@ -31,7 +31,7 @@ function makeReact() {
  * - `render(presets)`: render one Readout with the given hook-state presets.
  *
  * `presets` is indexed by `useState` call order: 0 snapshot, 1 error,
- * 2 placement, 3 hovered, 4 open, 5 now, 6 refreshing, 7 compact.
+ * 2 placement, 3 open, 4 now, 5 refreshing.
  */
 export function mountClient(language, options = {}) {
   let factory = null
@@ -96,6 +96,7 @@ export function mountClient(language, options = {}) {
     const texts = []
     const buttons = []
     const dots = []
+    const order = []
     const walk = (node) => {
       if (node === null || node === undefined || node === false) return
       if (Array.isArray(node)) {
@@ -104,18 +105,24 @@ export function mountClient(language, options = {}) {
       }
       if (typeof node === 'string' || typeof node === 'number') {
         const text = String(node)
-        if (text.trim() !== '') texts.push(text)
+        if (text.trim() !== '') {
+          texts.push(text)
+          order.push('text:' + text)
+        }
         return
       }
       if (typeof node === 'object') {
         if (node.type === 'button') buttons.push(node.props)
         // The peak/off-peak status dot is the tree's only circular element.
-        if (node.props && node.props.style && node.props.style.borderRadius === '50%') dots.push(node.props)
+        if (node.props && node.props.style && node.props.style.borderRadius === '50%') {
+          dots.push(node.props)
+          order.push('dot')
+        }
         for (const child of node.children || []) walk(child)
       }
     }
     walk(tree)
-    return { texts, buttons, dots }
+    return { texts, buttons, dots, order }
   }
 
   return { exports, registered, render }
@@ -152,10 +159,10 @@ export function snapshotFixture(overrides = {}) {
   }
 }
 
-/** Hook-state presets for a rendered readout. */
-export function readoutPresets({ snapshot = null, error = null, open = false, compact = false, now = Date.now() } = {}) {
-  const placement = { left: 100, top: 720, width: 150, height: 20, available: 300, cardRight: 268, cardMaxWidth: 260 }
-  return [snapshot, error, placement, false, open, now, false, compact]
+/** Hook-state presets for a rendered readout (order: snapshot, error, placement, open, now, refreshing). */
+export function readoutPresets({ snapshot = null, error = null, open = false, now = Date.now() } = {}) {
+  const placement = { left: 100, top: 720, width: 60, height: 20, cardRight: 268, cardMaxWidth: 260 }
+  return [snapshot, error, placement, open, now, false]
 }
 
 /** Extract the TEXT dictionary of one language straight from the source. */

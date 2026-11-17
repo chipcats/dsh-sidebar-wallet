@@ -2,10 +2,10 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-A one-line readout at the far right end of the DeepSeek Harness sidebar account row: **balance** and **today's spend**. Hover for the details card, click to refresh.
+A status dot and **today's spend** at the far right end of the DeepSeek Harness sidebar account row; hover for the details card (balance included), click to refresh.
 
 ```
-Balance ¥128.00 · Today ¥12.34
+● ¥12.34
 ```
 
 ![Sidebar readout and hover card (English)](assets/preview-en.png)
@@ -17,7 +17,7 @@ Balance ¥128.00 · Today ¥12.34
 - **Balance**: the official `GET /user/balance` — uses the saved `DEEPSEEK_API_KEY` first, falling back to the signed-in DeepSeek account wallet.
 - **Today's spend**: the official Platform usage export (Beijing calendar day, same numbers as the console's Usage page); falls back to a local session-log estimate, marked with `≈`.
 - **Hover / click**: hover shows balance, today's spend and request count, input (hit / miss) tokens, output tokens, cache hit rate, the peak/off-peak countdown, update time and source; click refreshes.
-- **Status dot**: the dot at the start of the readout is green during off-peak hours and amber during peak hours; the hover card carries the countdown.
+- **Status dot**: the dot in front of the readout is green during off-peak hours and amber during peak hours; the hover card carries the countdown.
 - **Language**: the readout follows the DSH interface language (Chinese / English) and switches live with the Language setting.
 
 ## Install
