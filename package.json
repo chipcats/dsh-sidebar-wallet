@@ -1,6 +1,6 @@
 {
   "name": "dsh-sidebar-wallet",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "One-line DeepSeek balance and today's spend at the right end of the DSH sidebar account row, with a hover card.",
   "type": "module",
   "scripts": {
@@ -40,6 +40,7 @@
     "index.js",
     "client.js",
     "cordis.patch.yml",
+    "holidays.json",
     "locale/*.json",
     "icon.svg",
     "assets/*.png",

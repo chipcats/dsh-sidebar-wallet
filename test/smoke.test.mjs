@@ -103,6 +103,31 @@ test('hover card repeats the status dot in the rate row', () => {
   assert.equal(peak.dots[0].style.background, peak.dots[1].style.background, 'both dots share one colour')
 })
 
+test('statutory holidays bill off-peak even on weekdays', () => {
+  const snapshot = snapshotFixture({ period: { holidays: ['2026-10-01', '2027-02-05'] } })
+  for (const day of ['2026-10-01', '2027-02-05']) {
+    const view = mountClient('zh-CN').render(readoutPresets({ snapshot, now: Date.parse(day + 'T10:00:00+08:00') }))
+    assert.match(String(view.dots[0].style.background), /state-success/, day + ' is off-peak')
+  }
+  // 2027-01-31 is a make-up workday on a Sunday: weekends stay off-peak.
+  const makeUp = mountClient('zh-CN').render(readoutPresets({ snapshot, now: Date.parse('2027-01-31T10:00:00+08:00') }))
+  assert.match(String(makeUp.dots[0].style.background), /state-success/, 'make-up Sunday stays off-peak')
+})
+
+test('holidays.json bundles statutory days for this year and the next', () => {
+  const data = JSON.parse(read('holidays.json'))
+  assert.ok(Array.isArray(data.days) && data.days.length > 0, 'holiday days present')
+  assert.deepEqual(data.days, [...new Set(data.days)].sort(), 'sorted and unique')
+  for (const day of data.days) assert.match(day, /^\d{4}-\d{2}-\d{2}$/, 'ISO day: ' + day)
+  assert.ok(data.days.includes('2026-10-01'), '2026 National Day')
+  assert.ok(data.days.includes('2027-02-05'), '2027 Spring Festival')
+})
+
+test('the Host payload carries the holiday list', () => {
+  assert.match(HOST_SOURCE, /holidays: HOLIDAY_DAYS/, 'state payload ships holidays')
+  assert.match(HOST_SOURCE, /holidays\.json/, 'host reads the data file')
+})
+
 test('card is closed when the readout is not hovered', () => {
   const zh = mountClient('zh-CN').render(readoutPresets({ snapshot: snapshotFixture() }))
   assert.ok(!zh.texts.includes('输入'), 'closed card must not render rows')
@@ -221,7 +246,7 @@ test('package manifest stays installable', () => {
   for (const asset of ['assets/preview.png', 'assets/preview-en.png']) {
     assert.ok(fs.existsSync(path.join(REPO_ROOT, asset)), asset + ' exists')
   }
-  for (const file of ['index.js', 'client.js', 'cordis.patch.yml', 'README.md', 'README.zh-CN.md', 'LICENSE']) {
+  for (const file of ['index.js', 'client.js', 'cordis.patch.yml', 'holidays.json', 'README.md', 'README.zh-CN.md', 'LICENSE']) {
     assert.ok(pkg.files.includes(file), 'files entry: ' + file)
   }
   // The dev tooling and tests must never ship with the plugin.

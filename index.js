@@ -20,6 +20,9 @@
  * be able to break the harness, so optional services are resolved with
  * `root.get(...)` and every failure degrades to a status string.
  */
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { inflateRawSync } from 'node:zlib'
 
 export const name = 'dsh-sidebar-wallet'
@@ -38,25 +41,24 @@ const PEAK_HOURS = [
 ]
 
 /**
- * Public holidays (Beijing calendar days) billed entirely at off-peak rates.
- * Only days actually OFF work are listed; every make-up workday falls on a
- * weekend, and weekends are off-peak anyway.
- *
- * ⚠️ Append the next year once the State Council publishes the arrangement
- * (usually each November). Until then an unlisted holiday reads as an ordinary
- * peak weekday here, a display-only inaccuracy.
+ * Statutory holidays (Beijing calendar days) billed entirely at off-peak rates.
+ * The list ships as `holidays.json`, generated from NateScarlet/holiday-cn (which
+ * mirrors the State Council announcements) by tools/refresh-holidays.mjs.
+ * Make-up workdays are deliberately absent: they fall on weekends, which are
+ * off-peak anyway, so they need no special casing.
  */
-const HOLIDAY_VALLEY = new Set([
-  '2026-01-01', '2026-01-02', '2026-01-03',
-  '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19',
-  '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
-  '2026-04-04', '2026-04-05', '2026-04-06',
-  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
-  '2026-06-19', '2026-06-20', '2026-06-21',
-  '2026-09-25', '2026-09-26', '2026-09-27',
-  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05',
-  '2026-10-06', '2026-10-07',
-])
+function readHolidays() {
+  try {
+    const file = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'holidays.json'), 'utf8'))
+    return Array.isArray(file.days) ? file.days : []
+  } catch {
+    // A broken or missing data file must not stop the plugin from loading.
+    return []
+  }
+}
+
+const HOLIDAY_DAYS = readHolidays()
+const HOLIDAY_VALLEY = new Set(HOLIDAY_DAYS)
 
 /** Beijing calendar parts for one instant (read through UTC on a shifted clock). */
 function beijingParts(ms) {
@@ -788,6 +790,9 @@ export default {
           peak: isPeak(now),
           nextSwitchAt: nextSwitchAt(now),
           peakHours: PEAK_HOURS,
+          // The browser half computes the dot and countdown on the same rules;
+          // shipping the statutory days keeps both halves on one source of truth.
+          holidays: HOLIDAY_DAYS,
         },
         serverTime: now,
       }

@@ -32,6 +32,7 @@ dsh plugin --profile desktop add github:chipcats/dsh-sidebar-wallet
 
 - 官方用量来自 platform.deepseek.com 的网页私有接口 `api/v0/usage/export`（非公开 API）：插件通过 DSH 已登录账号的 `deepseekAccount.getPlatformSession()` 取用，无需手动粘贴 token；接口不可用时自动回退本地估算，不会让读数消失。
 - 隐私与安全：只访问 `api.deepseek.com`（余额）和 `platform.deepseek.com`（用量）两个域名；令牌只在 Host 进程内存中使用，不下发浏览器、不落盘；只注册一个只读路由 `GET /dsh-sidebar-wallet/state.json`（回环 / 同源校验）。无写入、无遥测、无第三方运行时依赖。
+- 节假日数据：插件内置 `holidays.json`（由 `tools/refresh-holidays.mjs` 从社区整理的国务院公告数据生成，MIT 许可）；构建时打包，运行时**不**访问任何节假日接口。补班日按周末低谷计（官方规则高峰只限周一至周五）。
 - 已知限制：官方口径是该账户下全部 API 调用（不区分 Key 或客户端）；未登录 DeepSeek 账号时只显示本地估算；峰谷与节假日表仅用于本地估算和倒计时。
 
 ## 许可证

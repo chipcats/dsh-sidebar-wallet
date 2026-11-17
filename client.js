@@ -149,22 +149,12 @@ window.__ModuleLoader__.load({
 		}
 
 		// --- peak / off-peak (keep in sync with index.js) ---------------------
+		// The statutory-holiday list is not embedded here: the Host ships it in
+		// `period.holidays`, so there is one authoritative copy (holidays.json).
 		const PEAK_HOURS = [
 			[9, 12],
 			[14, 18],
 		];
-
-		const HOLIDAY_VALLEY = new Set([
-			"2026-01-01", "2026-01-02", "2026-01-03",
-			"2026-02-15", "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19",
-			"2026-02-20", "2026-02-21", "2026-02-22", "2026-02-23",
-			"2026-04-04", "2026-04-05", "2026-04-06",
-			"2026-05-01", "2026-05-02", "2026-05-03", "2026-05-04", "2026-05-05",
-			"2026-06-19", "2026-06-20", "2026-06-21",
-			"2026-09-25", "2026-09-26", "2026-09-27",
-			"2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05",
-			"2026-10-06", "2026-10-07",
-		]);
 
 		const BEIJING_OFFSET_MS = 8 * 3600 * 1000;
 
@@ -173,19 +163,19 @@ window.__ModuleLoader__.load({
 			return { day: d.toISOString().slice(0, 10), hour: d.getUTCHours(), weekday: d.getUTCDay() };
 		}
 
-		function isPeak(ms) {
+		function isPeak(ms, holidays) {
 			const parts = beijingParts(ms);
 			if (parts.weekday === 0 || parts.weekday === 6) return false;
-			if (HOLIDAY_VALLEY.has(parts.day)) return false;
+			if (holidays && holidays.has(parts.day)) return false;
 			return PEAK_HOURS.some(([start, end]) => parts.hour >= start && parts.hour < end);
 		}
 
 		/** Seconds until the next peak/off-peak flip, or null beyond 8 days. */
-		function secondsToSwitch(ms) {
-			const current = isPeak(ms);
+		function secondsToSwitch(ms, holidays) {
+			const current = isPeak(ms, holidays);
 			const start = Math.floor(ms / 1000);
 			for (let t = start + 1; t <= start + 8 * 24 * 3600; t += 60) {
-				if (isPeak(t * 1000) !== current) return t - start;
+				if (isPeak(t * 1000, holidays) !== current) return t - start;
 			}
 			return null;
 		}
@@ -722,8 +712,14 @@ window.__ModuleLoader__.load({
 
 			const T = TEXT[locale];
 			const LOCALE_TAG = localeTag(locale);
-			const peak = isPeak(now);
-			const countdown = humanDuration(secondsToSwitch(now));
+			// The Host owns the statutory-holiday list; an empty fallback only
+			// matters for the first frame before `period` arrives (the pill is
+			// hidden until then anyway).
+			const holidays = new Set(
+				(snapshot && snapshot.period && Array.isArray(snapshot.period.holidays) && snapshot.period.holidays) || [],
+			);
+			const peak = isPeak(now, holidays);
+			const countdown = humanDuration(secondsToSwitch(now, holidays));
 			// Green while the off-peak discount applies, amber during peak hours.
 			const rateColor = peak
 				? 'var(--dsw-alias-state-warn-primary, #d97706)'

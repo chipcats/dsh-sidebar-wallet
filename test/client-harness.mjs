@@ -154,6 +154,7 @@ export function snapshotFixture(overrides = {}) {
     balanceError: null,
     balanceErrorCode: null,
     balanceErrorStatus: null,
+    period: { peak: false, nextSwitchAt: null, peakHours: [[9, 12], [14, 18]], holidays: [] },
     ...overrides,
     today,
   }
