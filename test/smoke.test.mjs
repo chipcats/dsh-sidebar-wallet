@@ -90,6 +90,19 @@ test('hover card lists every row in both languages', () => {
   assert.ok(en.texts.some((text) => text.includes('peak in ') || text.includes('off-peak in ')))
 })
 
+test('hover card repeats the status dot in the rate row', () => {
+  const snapshot = snapshotFixture()
+  const peak = mountClient('zh-CN').render(
+    readoutPresets({ snapshot, open: true, now: Date.parse('2026-11-13T10:00:00+08:00') }),
+  )
+  assert.equal(peak.dots.length, 2, 'pill dot plus rate-row dot')
+  const rateIndex = peak.order.indexOf('text:峰谷')
+  const dotIndex = peak.order.indexOf('dot', rateIndex)
+  assert.ok(rateIndex >= 0 && dotIndex > rateIndex, 'rate dot follows the row label: ' + JSON.stringify(peak.order))
+  assert.match(String(peak.dots[1].style.background), /state-warn/, 'rate dot mirrors the peak colour')
+  assert.equal(peak.dots[0].style.background, peak.dots[1].style.background, 'both dots share one colour')
+})
+
 test('card is closed when the readout is not hovered', () => {
   const zh = mountClient('zh-CN').render(readoutPresets({ snapshot: snapshotFixture() }))
   assert.ok(!zh.texts.includes('输入'), 'closed card must not render rows')

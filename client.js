@@ -342,6 +342,21 @@ window.__ModuleLoader__.load({
 				fontVariantNumeric: 'tabular-nums',
 				color: 'var(--dsw-alias-label-primary)',
 			},
+			// Inline marker for the card's rate row. `vertical-align: middle` puts
+			// its centre on the text's x-height centre, which reads better than a
+			// flex-centred box against a baseline-aligned row.
+			cardDot: {
+				display: 'inline-block',
+				width: '6px',
+				height: '6px',
+				marginRight: '5px',
+				borderRadius: '50%',
+				verticalAlign: 'middle',
+				// `vertical-align: middle` uses the x-height, which sits a hair low
+				// against CJK glyphs; nudge the dot back onto their ink centre.
+				position: 'relative',
+				top: '-1px',
+			},
 			cardNote: {
 				fontSize: '11px',
 				lineHeight: '1.4',
@@ -710,12 +725,11 @@ window.__ModuleLoader__.load({
 			const peak = isPeak(now);
 			const countdown = humanDuration(secondsToSwitch(now));
 			// Green while the off-peak discount applies, amber during peak hours.
-			// Decorative only: the readout's aria-label already names the window.
-			const rateDotStyle = Object.assign({}, CSS.rateDot, {
-				background: peak
-					? 'var(--dsw-alias-state-warn-primary, #d97706)'
-					: 'var(--dsw-alias-state-success-primary, #16a34a)',
-			});
+			const rateColor = peak
+				? 'var(--dsw-alias-state-warn-primary, #d97706)'
+				: 'var(--dsw-alias-state-success-primary, #16a34a)';
+			const rateDotStyle = Object.assign({}, CSS.rateDot, { background: rateColor });
+			const cardDotStyle = Object.assign({}, CSS.cardDot, { background: rateColor });
 			const currency = (snapshot && snapshot.currency) || 'CNY';
 			const balance = money(snapshot ? snapshot.balance : null, currency);
 			const today = snapshot && snapshot.today ? snapshot.today : null;
@@ -745,7 +759,9 @@ window.__ModuleLoader__.load({
 					cardRows.push({ label: T.output, value: outputTokens > 0 ? compactTokens(outputTokens) : '—' });
 					cardRows.push({ label: T.cache, value: cacheRateText(today.cacheHitRate, !officialSource) || '—' });
 				}
-				cardRows.push({ label: T.rate, value: T.rateValue(peak, countdown) });
+				// The rate row repeats the pill's dot so the colour and the wording
+				// name the same window instead of asking the reader to remember it.
+				cardRows.push({ label: T.rate, value: T.rateValue(peak, countdown), dot: true });
 				cardRows.push({
 					label: T.updated,
 					value: clockOf(snapshot.balanceAt, LOCALE_TAG) + ' · ' + sourceLabel(snapshot.balanceSource, T),
@@ -853,7 +869,14 @@ window.__ModuleLoader__.load({
 												},
 												row.label,
 											),
-											h('span', { style: CSS.cardValue }, row.value),
+											row.dot
+												? h(
+														'span',
+														{ style: CSS.cardValue },
+														h('span', { style: cardDotStyle, 'aria-hidden': 'true' }),
+														row.value,
+													)
+												: h('span', { style: CSS.cardValue }, row.value),
 										),
 									)
 								: h('span', { style: CSS.cardNote }, T.loading),

@@ -41,7 +41,8 @@
   }
   .pill { display: inline-flex; align-items: baseline; gap: 5px; padding: 2px 6px; border-radius: 7px; line-height: 16px; }
   .pill .val { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: #0f1115; }
-  .pill .rate { flex: 0 0 auto; align-self: center; width: 6px; height: 6px; margin-top: 1px; border-radius: 50%; background: #16a34a; }
+  .rate { flex: 0 0 auto; align-self: center; width: 6px; height: 6px; margin-top: 1px; border-radius: 50%; background: #16a34a; }
+  .rate.inline { display: inline-block; vertical-align: middle; position: relative; top: -1px; margin: 0 5px 0 0; }
 </style></head>
 <body>
   <div class="wrap">
@@ -51,7 +52,7 @@
       <div class="row"><span class="label">输入</span><span class="value">命中 8.6M · 未命中 128K</span></div>
       <div class="row"><span class="label">输出</span><span class="value">92.4K</span></div>
       <div class="row"><span class="label">缓存</span><span class="value">98.5%</span></div>
-      <div class="row"><span class="label">峰谷</span><span class="value">低谷 · 2h14m 后转峰</span></div>
+      <div class="row"><span class="label">峰谷</span><span class="value"><span class="rate inline"></span>低谷 · 2h14m 后转峰</span></div>
       <div class="row"><span class="label">更新</span><span class="value">21:05:32 · API Key</span></div>
     </div>
     <div class="pill">
