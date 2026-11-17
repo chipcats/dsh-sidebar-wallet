@@ -95,6 +95,7 @@ export function mountClient(language, options = {}) {
     const tree = registered.component({ wide: true })
     const texts = []
     const buttons = []
+    const dots = []
     const walk = (node) => {
       if (node === null || node === undefined || node === false) return
       if (Array.isArray(node)) {
@@ -108,11 +109,13 @@ export function mountClient(language, options = {}) {
       }
       if (typeof node === 'object') {
         if (node.type === 'button') buttons.push(node.props)
+        // The peak/off-peak status dot is the tree's only circular element.
+        if (node.props && node.props.style && node.props.style.borderRadius === '50%') dots.push(node.props)
         for (const child of node.children || []) walk(child)
       }
     }
     walk(tree)
-    return { texts, buttons }
+    return { texts, buttons, dots }
   }
 
   return { exports, registered, render }
@@ -150,9 +153,9 @@ export function snapshotFixture(overrides = {}) {
 }
 
 /** Hook-state presets for a rendered readout. */
-export function readoutPresets({ snapshot = null, error = null, open = false, compact = false } = {}) {
+export function readoutPresets({ snapshot = null, error = null, open = false, compact = false, now = Date.now() } = {}) {
   const placement = { left: 100, top: 720, width: 150, height: 20, available: 300, cardRight: 268, cardMaxWidth: 260 }
-  return [snapshot, error, placement, false, open, Date.now(), false, compact]
+  return [snapshot, error, placement, false, open, now, false, compact]
 }
 
 /** Extract the TEXT dictionary of one language straight from the source. */

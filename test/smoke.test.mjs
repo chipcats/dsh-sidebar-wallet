@@ -49,6 +49,22 @@ test('compact mode drops the pill labels but keeps the amounts', () => {
   assert.ok(zh.texts.includes('¥12.34'))
 })
 
+test('readout carries a peak/off-peak status dot', () => {
+  const snapshot = snapshotFixture()
+  // 2026-11-13 is a Friday: 10:00 Beijing is peak (09:00-12:00); 12:30 is off-peak.
+  const at = (iso, extra = {}) => readoutPresets({ snapshot, now: Date.parse(iso), ...extra })
+  const peak = mountClient('zh-CN').render(at('2026-11-13T10:00:00+08:00'))
+  const valley = mountClient('zh-CN').render(at('2026-11-13T12:30:00+08:00'))
+  const compact = mountClient('zh-CN').render(at('2026-11-13T12:30:00+08:00', { compact: true }))
+  for (const [name, view] of [['peak', peak], ['valley', valley], ['compact', compact]]) {
+    assert.equal(view.dots.length, 1, name + ': exactly one status dot')
+    assert.equal(view.dots[0]['aria-hidden'], 'true', name + ': dot stays out of the a11y tree')
+  }
+  assert.match(String(peak.dots[0].style.background), /state-warn/, 'peak dot uses the warn token')
+  assert.match(String(valley.dots[0].style.background), /state-success/, 'off-peak dot uses the success token')
+  assert.match(String(compact.dots[0].style.background), /state-success/, 'compact keeps the dot state')
+})
+
 test('hover card lists every row in both languages', () => {
   const snapshot = snapshotFixture()
   const zh = mountClient('zh-CN').render(readoutPresets({ snapshot, open: true }))

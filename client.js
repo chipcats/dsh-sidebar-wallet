@@ -290,6 +290,17 @@ window.__ModuleLoader__.load({
 				fontSize: '11px',
 				color: 'var(--dsw-alias-label-secondary)',
 			},
+			// Peak/off-peak status dot in front of the readout. Both colors come
+			// from the theme, so the dot stays legible in light and dark; the hex
+			// fallbacks only apply on shells that predate the state tokens.
+			rateDot: {
+				flex: '0 0 auto',
+				alignSelf: 'center',
+				width: '6px',
+				height: '6px',
+				borderRadius: '50%',
+				transition: 'background 200ms',
+			},
 			errorValue: {
 				fontSize: '12px',
 				fontVariantNumeric: 'tabular-nums',
@@ -725,6 +736,13 @@ window.__ModuleLoader__.load({
 			const LOCALE_TAG = localeTag(locale);
 			const peak = isPeak(now);
 			const countdown = humanDuration(secondsToSwitch(now));
+			// Green while the off-peak discount applies, amber during peak hours.
+			// Decorative only: the readout's aria-label already names the window.
+			const rateDotStyle = Object.assign({}, CSS.rateDot, {
+				background: peak
+					? 'var(--dsw-alias-state-warn-primary, #d97706)'
+					: 'var(--dsw-alias-state-success-primary, #16a34a)',
+			});
 			const currency = (snapshot && snapshot.currency) || 'CNY';
 			const balance = money(snapshot ? snapshot.balance : null, currency);
 			const today = snapshot && snapshot.today ? snapshot.today : null;
@@ -821,6 +839,7 @@ window.__ModuleLoader__.load({
 							hideCard();
 						},
 					},
+					h('span', { style: rateDotStyle, 'aria-hidden': 'true' }),
 					compact ? null : h('span', { style: CSS.label }, T.balance),
 					h('span', { style: error && snapshot == null ? CSS.errorValue : CSS.value }, balance),
 					h('span', { style: CSS.dot }, '·'),
